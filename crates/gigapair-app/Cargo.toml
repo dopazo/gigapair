@@ -1,0 +1,15 @@
+[package]
+name = "gigapair-app"
+description = "Gigapair desktop app (GPUI)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gigapair-core = { path = "../gigapair-core" }
+
+[lints]
+workspace = true

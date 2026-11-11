@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Gigapair is a peer-to-peer app for moving very large files (50–200+ GB) between paired devices: end-to-end encrypted, BLAKE3-verified and resumable. Rust workspace, GPUI desktop UI, CLI, and a background service.
 
 - Full product spec: `spec_gigapair.md` (in Spanish). It is the source of truth for scope, requirements (RF-xx / RNF-xx) and stage plan. Cite requirement IDs in commits and PRs when relevant.
-- Current stage: **pre-code**. Stage 1 is `gigapair-core` + `gigapaird` + CLI. Don't start UI work before stage 1 passes its acceptance test unless asked.
+- Current stage: **1, in progress** (workspace skeleton and `gigapair_core::paths` done). Stage 1 is `gigapair-core` + `gigapaird` + CLI. Don't start UI work before stage 1 passes its acceptance test unless asked.
 
 ## Architecture
 
@@ -99,3 +99,21 @@ Run `cargo fmt` and `cargo clippy` before considering a change done.
 ## Out of scope for v1
 
 Don't build these unless asked: one-to-many/swarm transfers, cloud storage or store-and-forward, two-way folder sync, compression/transcoding, mobile apps, auto-update (only "new release available" notice), code signing.
+Dont try to search for >200 gb files unless asked, you will test it when the time comes.
+
+## Next steps (stage 1)
+
+Done: workspace skeleton, `gigapair_core::paths` (sanitizing peer paths, collision names, partial dir layout, Windows long paths), CI.
+
+Known gaps in `paths`:
+
+- **No-clobber final move.** `std::fs::rename` replaces an existing destination on every OS, so there is a race between `unique_name` and the rename. Implement a rename that fails if the target exists (Linux `renameat2(RENAME_NOREPLACE)`, macOS `renamex_np(RENAME_EXCL)`, Windows `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`), retrying with the next `unique_name` on conflict.
+- **Hidden attribute** for `.gigapair-partial` on Windows (the leading dot doesn't hide it there).
+- **Collisions within one transfer** after sanitizing (`a:b` and `a_b` both become `a_b` on Windows): resolve with `unique_name` when materializing a collection.
+
+Suggested order next:
+
+1. **Validate iroh-blobs** (spec risk #4): can it store data in `.gigapair-partial/` on the destination disk and export with a rename instead of a copy? This decides whether we need a custom store. Needs a large dependency download.
+2. Wire messages (transfer request with names/sizes/hash, accept/reject, protocol version) and the local IPC API, with `serde`.
+3. SQLite schema (contacts, queue, history) with `rusqlite` `bundled`.
+4. CLI command tree with `clap` (spec "CLI y modo servicio" table).

@@ -1,0 +1,15 @@
+[package]
+name = "gigapaird"
+description = "Gigapair background service: owns the network node, queue and state"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gigapair-core = { path = "../gigapair-core" }
+
+[lints]
+workspace = true
