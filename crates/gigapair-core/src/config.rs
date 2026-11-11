@@ -40,6 +40,9 @@ pub struct Config {
     pub keep_awake: bool,
     /// Desktop notifications for requests and finished transfers (RF-13).
     pub notifications: bool,
+    /// Closing the app window keeps the app running in the system tray
+    /// (RF-14). Only the desktop app reads it.
+    pub close_to_tray: bool,
     /// Refuse to move data through a relay (fail rather than relay).
     pub direct_only: bool,
     /// Custom relay URL instead of the public n0 relays (RF-18).
@@ -64,6 +67,7 @@ impl Default for Config {
             download_dir: None,
             keep_awake: true,
             notifications: true,
+            close_to_tray: true,
             direct_only: false,
             relay_url: None,
             discovery: true,
@@ -109,6 +113,7 @@ pub const KEYS: &[&str] = &[
     "download_dir",
     "keep_awake",
     "notifications",
+    "close_to_tray",
     "direct_only",
     "relay_url",
     "discovery",
@@ -170,6 +175,7 @@ impl Config {
             "download_dir" => self.download_dir.as_ref().map(|p| p.display().to_string()),
             "keep_awake" => Some(self.keep_awake.to_string()),
             "notifications" => Some(self.notifications.to_string()),
+            "close_to_tray" => Some(self.close_to_tray.to_string()),
             "direct_only" => Some(self.direct_only.to_string()),
             "relay_url" => self.relay_url.clone(),
             "discovery" => Some(self.discovery.to_string()),
@@ -207,6 +213,7 @@ impl Config {
             "download_dir" => self.download_dir = opt(value).map(PathBuf::from),
             "keep_awake" => self.keep_awake = boolean(value)?,
             "notifications" => self.notifications = boolean(value)?,
+            "close_to_tray" => self.close_to_tray = boolean(value)?,
             "direct_only" => self.direct_only = boolean(value)?,
             "relay_url" => {
                 if let Some(v) = opt(value) {

@@ -19,6 +19,20 @@ gpui-kit = "=0.9.1"
 anyhow = "1"
 tokio = { version = "1.54", features = ["full"] }
 qrcode = { version = "0.14", default-features = false }
+interprocess = "2.4"
+
+# Tray icon (RF-14). Pre-1.0: pinned exactly.
+# Linux: StatusNotifierItem over D-Bus, pure Rust (no GTK, which would fight
+# GPUI's event loop and is LGPL). Must use async-io, like GPUI's own D-Bus
+# code: ksni's default `tokio` feature switches zbus to Tokio for every user,
+# and GPUI's portal calls then panic outside a Tokio runtime.
+[target.'cfg(target_os = "linux")'.dependencies]
+ksni = { version = "=0.3.7", default-features = false, features = ["async-io"] }
+
+# Windows and macOS: native tray through tray-icon (no default features: they
+# only pull in GTK for Linux).
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+tray-icon = { version = "=0.26.1", default-features = false }
 
 [lints]
 workspace = true

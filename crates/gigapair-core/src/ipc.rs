@@ -57,26 +57,44 @@ impl std::fmt::Display for SocketAddr {
 /// The socket address for this set of folders. Each `GIGAPAIR_HOME` gets
 /// its own, so instances don't collide.
 pub fn socket_addr(dirs: &AppDirs) -> SocketAddr {
+    local_addr(dirs, "gigapair", "gigapaird.sock")
+}
+
+/// Where a running desktop app listens, so that starting it again shows
+/// the existing window instead of opening a second app.
+pub fn app_socket_addr(dirs: &AppDirs) -> SocketAddr {
+    local_addr(dirs, "gigapair-app", "app.sock")
+}
+
+/// A named pipe `<stem>-<instance>` on Windows, `<data>/<file>` elsewhere.
+fn local_addr(dirs: &AppDirs, stem: &str, file: &str) -> SocketAddr {
     if cfg!(windows) {
-        SocketAddr::Pipe(format!("gigapair-{}", dirs.instance_tag()))
+        SocketAddr::Pipe(format!("{stem}-{}", dirs.instance_tag()))
     } else {
-        let path = dirs.data.join("gigapaird.sock");
+        let path = dirs.data.join(file);
         // Unix socket paths are limited to ~104 bytes.
         if path.as_os_str().len() < 100 {
             SocketAddr::Path(path)
         } else {
             SocketAddr::Path(
-                std::env::temp_dir().join(format!("gigapair-{}.sock", dirs.instance_tag())),
+                std::env::temp_dir().join(format!("{stem}-{}.sock", dirs.instance_tag())),
             )
         }
     }
 }
 
-fn to_name(addr: &SocketAddr) -> io::Result<Name<'static>> {
-    match addr {
-        SocketAddr::Path(p) => p.clone().to_fs_name::<GenericFilePath>(),
-        SocketAddr::Pipe(n) => n.clone().to_ns_name::<GenericNamespaced>(),
+impl SocketAddr {
+    /// The address in the form `interprocess` takes.
+    pub fn to_name(&self) -> io::Result<Name<'static>> {
+        match self {
+            Self::Path(p) => p.clone().to_fs_name::<GenericFilePath>(),
+            Self::Pipe(n) => n.clone().to_ns_name::<GenericNamespaced>(),
+        }
     }
+}
+
+fn to_name(addr: &SocketAddr) -> io::Result<Name<'static>> {
+    addr.to_name()
 }
 
 /// Binds the service socket. Fails with `AddrInUse` if another service is

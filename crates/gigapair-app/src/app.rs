@@ -28,6 +28,7 @@ use gpui_kit::{
 
 use crate::backend::{Backend, BackendMsg};
 use crate::qr;
+use crate::shell;
 use crate::strings as s;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,21 +65,9 @@ pub struct GigapairApp {
 type Done = Box<dyn FnOnce(&mut GigapairApp, Response, &mut Window, &mut Context<GigapairApp>)>;
 
 impl GigapairApp {
-    pub fn new(dirs: AppDirs, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let (backend, mut rx) = Backend::start(dirs);
-
-        cx.spawn_in(window, async move |this, cx| {
-            while let Some(msg) = rx.recv().await {
-                if this
-                    .update_in(cx, |app, window, cx| app.on_backend(msg, window, cx))
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        })
-        .detach();
-
+    /// Service messages arrive through [`Self::on_backend`], called by the
+    /// shell, which owns the one connection to the service.
+    pub fn new(backend: Backend, window: &mut Window, cx: &mut Context<Self>) -> Self {
         // Countdown for the pairing code and coarse refresh of speeds.
         cx.spawn_in(window, async move |this, cx| {
             loop {
@@ -237,6 +226,8 @@ impl GigapairApp {
             |app, r, window, cx| {
                 if let Response::Config(entries) = r {
                     app.config = entries.into_iter().map(|e| (e.key, e.value)).collect();
+                    let close_to_tray = app.config_bool("close_to_tray");
+                    shell::set_close_to_tray(close_to_tray, cx);
                     let relay = app.config_str("relay_url");
                     let limit = app.config_str("upload_limit_kib");
                     app.relay_input
@@ -289,7 +280,7 @@ impl GigapairApp {
         );
     }
 
-    fn on_backend(&mut self, msg: BackendMsg, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn on_backend(&mut self, msg: BackendMsg, window: &mut Window, cx: &mut Context<Self>) {
         match msg {
             BackendMsg::Connected => {
                 self.connected = true;
@@ -1345,6 +1336,15 @@ impl GigapairApp {
                 self,
                 cx,
             ))
+            .when(cx.global::<shell::Shell>().has_tray(), |el| {
+                el.child(switch(
+                    "sw-tray",
+                    s::SETTINGS_CLOSE_TO_TRAY,
+                    "close_to_tray",
+                    self,
+                    cx,
+                ))
+            })
             .child(
                 Switch::new("sw-login")
                     .checked(self.start_at_login.unwrap_or(false))
