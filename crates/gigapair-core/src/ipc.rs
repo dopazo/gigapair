@@ -108,6 +108,12 @@ pub async fn bind(dirs: &AppDirs) -> io::Result<Listener> {
     Ok(listener)
 }
 
+/// Waits for the next client.
+pub async fn accept(listener: &Listener) -> io::Result<Conn> {
+    use interprocess::local_socket::traits::tokio::Listener as _;
+    Ok(Conn::new(listener.accept().await?))
+}
+
 /// One side of a line-delimited JSON connection.
 pub struct Conn {
     stream: BufReader<Stream>,
@@ -170,22 +176,39 @@ impl Client {
             client: client_name.to_owned(),
         })
         .await?;
-        match conn.recv::<Response>().await? {
-            Some(Response::Hello {
-                version,
-                service_version,
-            }) if version == IPC_VERSION => Ok(Self {
-                conn,
-                service_version,
-            }),
-            Some(Response::Hello {
-                service_version, ..
-            }) => Err(IpcError::Incompatible {
+        // Parse the greeting loosely so a service from another version
+        // (different message layout) still yields a clear error.
+        let Some(raw) = conn.recv::<serde_json::Value>().await? else {
+            return Err(IpcError::Closed);
+        };
+        let body = raw.get("data").unwrap_or(&raw);
+        let field = |k: &str| body.get(k).or_else(|| raw.get(k));
+        let service_version = field("service_version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_owned();
+        match (raw.get("type").and_then(|t| t.as_str()), field("version")) {
+            (Some("hello"), Some(v)) if v.as_u64() == Some(IPC_VERSION as u64) => {
+                if serde_json::from_value::<Response>(raw.clone()).is_err() {
+                    return Err(IpcError::Incompatible {
+                        service: service_version,
+                    });
+                }
+                Ok(Self {
+                    conn,
+                    service_version,
+                })
+            }
+            (Some("hello"), _) => Err(IpcError::Incompatible {
                 service: service_version,
             }),
-            Some(Response::Error { message }) => Err(IpcError::Service(message)),
-            Some(_) => Err(IpcError::Unexpected),
-            None => Err(IpcError::Closed),
+            (Some("error"), _) => Err(IpcError::Service(
+                field("message")
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("error")
+                    .to_owned(),
+            )),
+            _ => Err(IpcError::Unexpected),
         }
     }
 
@@ -233,7 +256,8 @@ pub fn sibling_exe(name: &str) -> Option<PathBuf> {
 }
 
 /// Starts `gigapaird` in the background, detached from this process.
-pub fn spawn_service() -> io::Result<()> {
+/// With custom folders (`GIGAPAIR_HOME`), the service gets the same ones.
+pub fn spawn_service(dirs: &AppDirs) -> io::Result<()> {
     let exe = sibling_exe("gigapaird").ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
@@ -241,6 +265,11 @@ pub fn spawn_service() -> io::Result<()> {
         )
     })?;
     let mut cmd = std::process::Command::new(exe);
+    if dirs.custom_root {
+        if let Some(root) = dirs.data.parent() {
+            cmd.arg("--home").arg(root);
+        }
+    }
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
@@ -273,7 +302,7 @@ pub async fn connect_or_spawn(
         Err(IpcError::NotRunning) => {}
         Err(e) => return Err(e),
     }
-    spawn_service()?;
+    spawn_service(dirs)?;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;

@@ -10,5 +10,6 @@ pub mod keys;
 pub mod manifest;
 pub mod pairing;
 pub mod paths;
+pub mod service;
 pub mod types;
 pub mod wire;

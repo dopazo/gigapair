@@ -102,8 +102,9 @@ pub enum Request {
     Shutdown,
 }
 
+// Adjacently tagged: internally tagged enums can't hold lists.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Response {
     Ok,
     Hello {
@@ -156,7 +157,7 @@ pub struct StatusInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Event {
     /// A transfer was created or changed.
     Transfer(TransferInfo),
@@ -183,3 +184,113 @@ pub const RELAY_NOTICE: &str = "This transfer goes through a relay because a dir
 could not be made. The relay only forwards end-to-end encrypted data and cannot read your files, \
 but it can see both devices' IP addresses, when you transfer and how much. You can turn on \
 \"direct only\" or use your own relay in the settings.";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Direction, TransferStatus};
+
+    fn sample_transfer() -> TransferInfo {
+        TransferInfo {
+            id: "ab".into(),
+            direction: Direction::Send,
+            peer_id: "p".into(),
+            peer_name: "Ana".into(),
+            status: TransferStatus::Transferring,
+            label: "x".into(),
+            total_bytes: 1,
+            done_bytes: 0,
+            file_count: 1,
+            speed_bps: 0,
+            eta_secs: None,
+            conn: None,
+            error: None,
+            note: None,
+            dest_dir: None,
+            created_at: 0,
+            finished_at: None,
+        }
+    }
+
+    fn roundtrip<T: Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug>(v: T) {
+        let text = serde_json::to_string(&v).unwrap();
+        assert!(!text.contains('\n'));
+        let back: T = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn every_message_serializes() {
+        let contact = Contact {
+            node_id: "n".into(),
+            name: "Ana".into(),
+            auto_accept: false,
+            online: true,
+            last_seen: None,
+            added_at: 0,
+        };
+        let pending = PendingPair {
+            id: "1".into(),
+            node_id: "n".into(),
+            remote_name: "r".into(),
+            fingerprint: "a b c d".into(),
+            incoming: true,
+            expires_at: 0,
+        };
+        for r in [
+            Response::Ok,
+            Response::Hello {
+                version: 1,
+                service_version: "x".into(),
+            },
+            Response::PairCode {
+                code: "c".into(),
+                expires_at: 1,
+            },
+            Response::PendingPair(pending.clone()),
+            Response::PendingPairs(vec![pending.clone()]),
+            Response::Contact(contact.clone()),
+            Response::Contacts(vec![contact.clone()]),
+            Response::Sent {
+                transfer: sample_transfer(),
+                warnings: vec!["w".into()],
+            },
+            Response::Transfer(sample_transfer()),
+            Response::Transfers(vec![sample_transfer()]),
+            Response::Config(vec![ConfigEntry {
+                key: "k".into(),
+                value: None,
+            }]),
+            Response::Error {
+                message: "e".into(),
+            },
+        ] {
+            roundtrip(r);
+        }
+        for e in [
+            Event::Transfer(sample_transfer()),
+            Event::IncomingRequest(sample_transfer()),
+            Event::PairRequest(pending),
+            Event::PairCompleted(contact),
+            Event::ContactsChanged,
+            Event::RelayFirstUse { relay: "r".into() },
+            Event::KeepAwake { active: true },
+            Event::Notice {
+                message: "m".into(),
+            },
+        ] {
+            roundtrip(e);
+        }
+        for r in [
+            Request::Status,
+            Request::Send {
+                contact: "a".into(),
+                paths: vec!["/x".into()],
+            },
+            Request::ConfigGet { key: None },
+            Request::History { limit: 3 },
+        ] {
+            roundtrip(r);
+        }
+    }
+}
