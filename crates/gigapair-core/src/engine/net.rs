@@ -15,6 +15,8 @@ use crate::wire::{
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const PING_INTERVAL: Duration = Duration::from_secs(45);
+/// How long to wait for the answer to a request.
+pub(super) const ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
@@ -34,22 +36,67 @@ impl From<std::io::Error> for NetError {
     }
 }
 
+/// Binds the endpoint, reusing the UDP port of the last run when possible
+/// so the direct addresses contacts remember stay valid across restarts
+/// (useful on a LAN, or when relays are unreachable).
 pub(super) async fn bind_endpoint(
     config: &Config,
     key: SecretKey,
     mode: NetworkMode,
+    port_file: &std::path::Path,
 ) -> EngineResult<Endpoint> {
+    let saved: Option<u16> = std::fs::read_to_string(port_file)
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .filter(|p| *p != 0);
+    let endpoint = match saved {
+        Some(port) => match bind_on(config, key.clone(), mode, port).await {
+            Ok(ep) => ep,
+            Err(e) => {
+                tracing::info!("UDP port {port} is not available ({e}); using a new one");
+                bind_on(config, key, mode, 0).await?
+            }
+        },
+        None => bind_on(config, key, mode, 0).await?,
+    };
+    if let Some(port) = endpoint
+        .bound_sockets()
+        .iter()
+        .find(|a| a.is_ipv4())
+        .map(|a| a.port())
+        && Some(port) != saved
+    {
+        let _ = std::fs::write(port_file, port.to_string());
+    }
+    Ok(endpoint)
+}
+
+async fn bind_on(
+    config: &Config,
+    key: SecretKey,
+    mode: NetworkMode,
+    port: u16,
+) -> EngineResult<Endpoint> {
+    use iroh::endpoint::BindOpts;
     let bind_err = |e: String| EngineError::Bind(e);
     let builder = match mode {
         NetworkMode::LocalOnly => Endpoint::builder(presets::Minimal)
             .relay_mode(RelayMode::Disabled)
             .clear_ip_transports()
-            .bind_addr("127.0.0.1:0")
+            .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], port)))
             .map_err(|e| bind_err(e.to_string()))?,
         NetworkMode::Internet => {
             // N0 publishes only the relay URL (not IP addresses) to n0's
             // DNS, so contacts can find this device by its id.
-            let mut b = Endpoint::builder(presets::N0);
+            let mut b = Endpoint::builder(presets::N0)
+                .clear_ip_transports()
+                .bind_addr(std::net::SocketAddr::from(([0, 0, 0, 0], port)))
+                .map_err(|e| bind_err(e.to_string()))?
+                .bind_addr_with_opts(
+                    std::net::SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port)),
+                    BindOpts::default().set_is_required(false),
+                )
+                .map_err(|e| bind_err(e.to_string()))?;
             if !config.discovery {
                 b = b.clear_address_lookup();
             }
@@ -84,13 +131,43 @@ pub(super) fn advertised_addr(inner: &Inner, include_ips: bool) -> EndpointAddr 
     )
 }
 
-/// Remembers a contact's address hint.
+/// Remembers a contact's address hints: the new ones first, then the
+/// ones already known (at most 8 in total).
 pub(super) fn store_addr(inner: &Inner, addr: &EndpointAddr) {
     if addr.addrs.is_empty() {
         return;
     }
-    if let Ok(json) = serde_json::to_string(addr) {
-        let _ = inner.db.set_contact_addr(&addr.id.to_string(), &json);
+    let node = addr.id.to_string();
+    let mut addrs: Vec<TransportAddr> = addr.addrs.iter().cloned().collect();
+    if let Some(old) = inner
+        .db
+        .contact_addr(&node)
+        .ok()
+        .flatten()
+        .and_then(|j| serde_json::from_str::<EndpointAddr>(&j).ok())
+        .filter(|a| a.id == addr.id)
+    {
+        for a in old.addrs {
+            if !addrs.contains(&a) {
+                addrs.push(a);
+            }
+        }
+    }
+    addrs.truncate(8);
+    if let Ok(json) = serde_json::to_string(&EndpointAddr::from_parts(addr.id, addrs)) {
+        let _ = inner.db.set_contact_addr(&node, &json);
+    }
+}
+
+/// Remembers where an authenticated contact connected from.
+fn learn_from_conn(inner: &Inner, conn: &Connection, remote: EndpointId) {
+    let addrs: Vec<TransportAddr> = conn
+        .paths()
+        .iter()
+        .map(|p| p.remote_addr().clone())
+        .collect();
+    if !addrs.is_empty() {
+        store_addr(inner, &EndpointAddr::from_parts(remote, addrs));
     }
 }
 
@@ -115,10 +192,10 @@ impl Inner {
     pub(super) async fn connect(&self, peer: EndpointId) -> Result<Connection, NetError> {
         {
             let conns = self.conns.lock().await;
-            if let Some(c) = conns.get(&peer) {
-                if c.close_reason().is_none() {
-                    return Ok(c.clone());
-                }
+            if let Some(c) = conns.get(&peer)
+                && c.close_reason().is_none()
+            {
+                return Ok(c.clone());
             }
         }
         let addr = self
@@ -149,13 +226,21 @@ impl Inner {
         conn: &Connection,
         req: &PeerRequest,
     ) -> Result<(PeerResponse, RecvStream), NetError> {
-        let (mut send, mut recv) = conn
-            .open_bi()
+        let exchange = async {
+            let (mut send, mut recv) = conn
+                .open_bi()
+                .await
+                .map_err(|e| NetError::Connect(e.to_string()))?;
+            write_msg(&mut send, req).await?;
+            let _ = send.finish();
+            let env = read_msg::<_, PeerResponse>(&mut recv).await?;
+            Ok::<_, NetError>((env, recv))
+        };
+        // A connection whose peer vanished can stay open for a while;
+        // don't wait on it forever.
+        let (env, recv) = tokio::time::timeout(ANSWER_TIMEOUT, exchange)
             .await
-            .map_err(|e| NetError::Connect(e.to_string()))?;
-        write_msg(&mut send, req).await?;
-        let _ = send.finish();
-        let env = read_msg::<_, PeerResponse>(&mut recv).await?;
+            .map_err(|_| NetError::Connect("no answer".into()))??;
         if env.v != PROTOCOL_VERSION {
             return Err(WireError::Incompatible {
                 peer: env.v,
@@ -188,12 +273,28 @@ impl Inner {
         let conn = self.connect(peer).await?;
         match self.open_request(&conn, req).await {
             // A cached connection may have died silently: retry once fresh.
-            Err(NetError::Connect(_)) => {
-                self.conns.lock().await.remove(&peer);
+            Err(NetError::Connect(_) | NetError::Wire(WireError::Io(_))) => {
+                self.forget_conn(peer).await;
                 let conn = self.connect(peer).await?;
-                Ok(self.open_request(&conn, req).await?.0)
+                match self.open_request(&conn, req).await {
+                    Ok((r, _)) => Ok(r),
+                    Err(e) => {
+                        if !matches!(e, NetError::Remote { .. }) {
+                            self.forget_conn(peer).await;
+                        }
+                        Err(e)
+                    }
+                }
             }
             other => Ok(other?.0),
+        }
+    }
+
+    /// Drops the cached connection to `peer` so the next attempt dials
+    /// again.
+    pub(super) async fn forget_conn(&self, peer: EndpointId) {
+        if let Some(c) = self.conns.lock().await.remove(&peer) {
+            c.close(0u32.into(), b"reconnecting");
         }
     }
 
@@ -316,6 +417,7 @@ async fn handle_stream(
             "this device is not paired with you; pair again to send files",
         ),
         PeerRequest::Ping { addr } => {
+            learn_from_conn(inner, conn, remote);
             if let Some(addr) = addr.filter(|a| a.id == remote) {
                 store_addr(inner, &addr);
             }
@@ -326,6 +428,7 @@ async fn handle_stream(
             }
         }
         PeerRequest::Offer(offer) => {
+            learn_from_conn(inner, conn, remote);
             inner.set_online(&peer, true);
             recv::handle_offer(inner, remote, offer)
         }

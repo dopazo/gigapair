@@ -549,10 +549,10 @@ pub(super) async fn serve_get(
     .await;
     {
         let mut live = inner.live();
-        if let Some(l) = live.get_mut(id) {
-            if l.serving.as_ref().is_some_and(|(g, _)| *g == serving_gen) {
-                l.serving = None;
-            }
+        if let Some(l) = live.get_mut(id)
+            && l.serving.as_ref().is_some_and(|(g, _)| *g == serving_gen)
+        {
+            l.serving = None;
         }
     }
     let finished = result.is_ok();
@@ -562,17 +562,17 @@ pub(super) async fn serve_get(
         let _ = tokio::time::timeout(Duration::from_secs(30), send.stopped()).await;
     }
     inner.flush_progress(id);
-    if let Ok(Some(r)) = inner.db.transfer(id) {
-        if r.status == TransferStatus::Transferring {
-            inner.set_status(id, TransferStatus::Queued);
-            let last = file as usize + 1 == files.len();
-            let note = if finished && last {
-                format!("Waiting for {} to verify", r.peer_name)
-            } else {
-                format!("Waiting for {}", r.peer_name)
-            };
-            inner.set_note(id, Some(note));
-        }
+    if let Ok(Some(r)) = inner.db.transfer(id)
+        && r.status == TransferStatus::Transferring
+    {
+        inner.set_status(id, TransferStatus::Queued);
+        let last = file as usize + 1 == files.len();
+        let note = if finished && last {
+            format!("Waiting for {} to verify", r.peer_name)
+        } else {
+            format!("Waiting for {}", r.peer_name)
+        };
+        inner.set_note(id, Some(note));
     }
     result
 }

@@ -265,10 +265,10 @@ pub fn spawn_service(dirs: &AppDirs) -> io::Result<()> {
         )
     })?;
     let mut cmd = std::process::Command::new(exe);
-    if dirs.custom_root {
-        if let Some(root) = dirs.data.parent() {
-            cmd.arg("--home").arg(root);
-        }
+    if dirs.custom_root
+        && let Some(root) = dirs.data.parent()
+    {
+        cmd.arg("--home").arg(root);
     }
     cmd.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

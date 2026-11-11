@@ -72,7 +72,36 @@ fn init_logging(dirs: &AppDirs, verbose: bool) -> tracing_appender::non_blocking
     guard
 }
 
+/// Holds an exclusive lock on the data folder for the life of the
+/// process, so two services never share one database. Waits a little for
+/// a previous instance that is still shutting down.
+async fn lock_instance(dirs: &AppDirs) -> Result<Option<std::fs::File>> {
+    let path = dirs.data.join("gigapaird.lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("could not open {}", path.display()))?;
+    for _ in 0..40 {
+        match file.try_lock() {
+            Ok(()) => return Ok(Some(file)),
+            Err(std::fs::TryLockError::WouldBlock) => {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await
+            }
+            Err(std::fs::TryLockError::Error(e)) => {
+                return Err(e).with_context(|| format!("could not lock {}", path.display()));
+            }
+        }
+    }
+    Ok(None)
+}
+
 async fn run(dirs: AppDirs) -> Result<()> {
+    let Some(_lock) = lock_instance(&dirs).await? else {
+        eprintln!("gigapaird is already running");
+        return Ok(());
+    };
     let listener = match ipc::bind(&dirs).await {
         Ok(l) => l,
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
@@ -141,11 +170,9 @@ async fn run(dirs: AppDirs) -> Result<()> {
         _ = tokio::signal::ctrl_c() => tracing::info!("interrupted"),
         _ = terminate() => tracing::info!("terminated"),
     }
+    // Dropping the listener removes the socket file.
     accept.abort();
     engine.shutdown().await;
-    if let ipc::SocketAddr::Path(p) = ipc::socket_addr(&dirs) {
-        let _ = std::fs::remove_file(p);
-    }
     Ok(())
 }
 

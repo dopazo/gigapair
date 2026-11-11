@@ -166,7 +166,13 @@ impl Engine {
         let db = Db::open(&opts.dirs.db_file())?;
         import_seed_contacts(&db, &opts.config);
 
-        let endpoint = net::bind_endpoint(&opts.config, opts.secret_key, opts.network).await?;
+        let endpoint = net::bind_endpoint(
+            &opts.config,
+            opts.secret_key,
+            opts.network,
+            &opts.dirs.data.join("udp-port"),
+        )
+        .await?;
         let (events, _) = broadcast::channel(1024);
         let (active_tx, _) = watch::channel(false);
         let slots = opts.config.max_parallel_downloads.max(1);
@@ -425,10 +431,10 @@ impl Inner {
         };
         if changed {
             let _ = self.db.set_conn(id, conn.as_ref());
-            if let Some(c) = &conn {
-                if c.kind == crate::types::ConnKind::Relay {
-                    self.relay_first_use(c.relay.clone().unwrap_or_default());
-                }
+            if let Some(c) = &conn
+                && c.kind == crate::types::ConnKind::Relay
+            {
+                self.relay_first_use(c.relay.clone().unwrap_or_default());
             }
             self.emit_transfer(id);
         }
@@ -543,10 +549,10 @@ impl Inner {
         tokio::spawn(async move {
             fut.await;
             let mut live = inner.live();
-            if let Some(l) = live.get_mut(&id) {
-                if l.task.as_ref().is_some_and(|(g, _)| *g == gen_id) {
-                    l.task = None;
-                }
+            if let Some(l) = live.get_mut(&id)
+                && l.task.as_ref().is_some_and(|(g, _)| *g == gen_id)
+            {
+                l.task = None;
             }
         });
     }

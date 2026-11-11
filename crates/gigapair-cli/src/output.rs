@@ -72,10 +72,10 @@ pub fn print_transfers(list: &[TransferInfo]) {
         if let Some(note) = &t.note {
             println!("          {note}");
         }
-        if let Some(err) = &t.error {
-            if t.status != TransferStatus::Completed {
-                println!("          {err}");
-            }
+        if let Some(err) = &t.error
+            && t.status != TransferStatus::Completed
+        {
+            println!("          {err}");
         }
     }
 }

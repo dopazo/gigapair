@@ -608,11 +608,11 @@ async fn service_cmd(dirs: &AppDirs, action: &ServiceCmd) -> Result<()> {
             let exe =
                 ipc::sibling_exe("gigapaird").ok_or_else(|| anyhow!("{}", s::NO_DAEMON_EXE))?;
             // A copy started by hand would hold the socket.
-            if running().await {
-                if let Ok(mut c) = Client::connect(dirs, "cli").await {
-                    let _ = c.call(Request::Shutdown).await;
-                    tokio::time::sleep(Duration::from_millis(800)).await;
-                }
+            if running().await
+                && let Ok(mut c) = Client::connect(dirs, "cli").await
+            {
+                let _ = c.call(Request::Shutdown).await;
+                tokio::time::sleep(Duration::from_millis(800)).await;
             }
             let msg = service::install(&exe, &dirs.logs).context(s::INSTALL_FAILED)?;
             println!("{msg}");

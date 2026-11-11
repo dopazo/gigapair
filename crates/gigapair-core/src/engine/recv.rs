@@ -33,6 +33,8 @@ const SPACE_MARGIN: u64 = 64 * 1024 * 1024;
 const DIRECT_WAIT: Duration = Duration::from_secs(15);
 /// Give up after this many failed whole-file checks in a row.
 const MAX_INTEGRITY_FAILURES: u32 = 3;
+/// Give up on a stream that delivers nothing for this long.
+const BLOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(super) fn owns(inner: &Inner, peer: &str, id: &str) -> bool {
     matches!(inner.db.transfer(id), Ok(Some(r)) if r.direction == Direction::Receive && r.peer == peer)
@@ -140,7 +142,20 @@ pub(super) fn handle_offer(inner: &Arc<Inner>, remote: EndpointId, offer: Offer)
         peer: peer.clone(),
         peer_name: contact.name.clone(),
         status: TransferStatus::PendingAccept,
-        label: manifest::make_label(&roots, &root_is_dir),
+        label: {
+            // Prefer the sender's label so both sides show the same text.
+            let l: String = offer
+                .label
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(200)
+                .collect();
+            if l.trim().is_empty() {
+                manifest::make_label(&roots, &root_is_dir)
+            } else {
+                l
+            }
+        },
         total_size: offer.total_size,
         file_count: offer.files.len() as u64,
         done_bytes: 0,
@@ -401,6 +416,9 @@ async fn download_task(inner: &Arc<Inner>, id: &str, token: &CancellationToken) 
                 }
             }
             Err(DlError::Retry(msg)) => {
+                if let Ok(peer) = row.peer.parse::<EndpointId>() {
+                    inner.forget_conn(peer).await;
+                }
                 requeue(inner, id, &row);
                 let delay = backoff.next_delay();
                 inner.set_note(id, Some(format!("{msg}; retrying")));
@@ -618,9 +636,10 @@ async fn fetch_hashes(
         )));
     }
     let mut buf = vec![0u8; count as usize * HASH_LEN];
-    recv.read_exact(&mut buf)
-        .await
-        .map_err(|_| DlError::Retry(format!("Connection to {name} lost")))?;
+    match tokio::time::timeout(BLOCK_TIMEOUT, recv.read_exact(&mut buf)).await {
+        Ok(Ok(())) => {}
+        _ => return Err(DlError::Retry(format!("Connection to {name} lost"))),
+    }
     let expected = f.blocks_hash.clone().unwrap_or_default();
     if blake3::hash(&buf).to_hex().as_str() != expected {
         return Err(DlError::Fatal(format!(
@@ -722,9 +741,9 @@ async fn fetch_data(
         let mut buf = vec![0u8; block_len(f.size, b) as usize];
         let r = tokio::select! {
             _ = token.cancelled() => { read_result = Err(DlError::Stopped); break; }
-            r = recv.read_exact(&mut buf) => r,
+            r = tokio::time::timeout(BLOCK_TIMEOUT, recv.read_exact(&mut buf)) => r,
         };
-        if r.is_err() {
+        if !matches!(r, Ok(Ok(()))) {
             read_result = Err(DlError::Retry(format!("Connection to {name} lost")));
             break;
         }
