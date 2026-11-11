@@ -6,7 +6,7 @@ Gigapair is a desktop app and CLI for sending very large files (tens to hundreds
 
 *Originally built to send talk recordings between the organizers of [builderia.lat](https://builderia.lat).*
 
-> **Status:** early development. Nothing here is ready to use yet. The sections below describe what v1 will do; see the [roadmap](#roadmap) for progress.
+> **Status:** pre-release. The service, CLI and desktop app work when built from source (see [Building from source](#building-from-source)); there are no installers yet. See the [roadmap](#roadmap).
 
 ## Why Gigapair
 
@@ -48,7 +48,7 @@ Each computer runs a small background service, `gigapaird`, which owns the netwo
 │   local IPC          │                     │   local IPC          │
 ├──────────────────────┤   QUIC (direct)     ├──────────────────────┤
 │   gigapaird          │◄═══════════════════►│   gigapaird          │
-│   iroh + iroh-blobs  │                     │   iroh + iroh-blobs  │
+│   iroh (QUIC)        │                     │   iroh (QUIC)        │
 └──────────────────────┘                     └──────────────────────┘
              ╲                                     ╱
               ╲──────►  relay (fallback)  ◄───────╱
@@ -63,7 +63,7 @@ Sending a file works like this:
 4. Data is downloaded into a hidden `.gigapair-partial/` folder inside the destination folder, and each block is verified as it arrives.
 5. Once the root hash matches, the file is renamed into place. It never appears under its final name while incomplete.
 
-Gigapair is built on [iroh](https://github.com/n0-computer/iroh) for connectivity and [iroh-blobs](https://github.com/n0-computer/iroh-blobs) for verified, resumable transfers. The UI uses [GPUI](https://www.gpui.rs/).
+Gigapair is built on [iroh](https://github.com/n0-computer/iroh) for connectivity (QUIC, hole punching, relays). Transfers use a small protocol of its own on top of iroh: files are split into 4 MiB blocks, each checked against a BLAKE3 block list that the offer pins with a hash, and the whole file is checked against its BLAKE3 root hash (the same value `b3sum` prints) before it is moved into place. See [docs/transfer-protocol.md](docs/transfer-protocol.md). The UI uses [GPUI](https://www.gpui.rs/) with [GPUI Kit](https://gpui-kit.com).
 
 ## Privacy and relays
 
@@ -119,7 +119,8 @@ The CLI binary is `gigapair` (optional short alias: `gpair`).
 | `gigapair requests` | List pending incoming requests |
 | `gigapair accept <id>` / `reject <id>` | Accept or reject a request |
 | `gigapair status [--watch]` | Active transfers, speed and connection type |
-| `gigapair history` | Sent and received transfers |
+| `gigapair history [--clear]` | Sent and received transfers |
+| `gigapair pause\|resume\|cancel\|retry <id>` | Control a transfer (ids can be shortened) |
 | `gigapair config get\|set <key> <value>` | Read or change settings |
 | `gigapair service install\|uninstall\|start\|stop\|status` | Manage the background service |
 
@@ -149,9 +150,11 @@ The service uses each platform's native mechanism:
 
 | Platform | Mechanism |
 | --- | --- |
-| Linux | systemd user unit (with `loginctl enable-linger` to run without a login), or a system unit with a dedicated user |
+| Linux | systemd user unit (with `loginctl enable-linger` to run without a login) |
 | macOS | LaunchAgent in `~/Library/LaunchAgents` |
-| Windows | Task at logon, or a Windows Service for servers |
+| Windows | Start at login (`HKCU\...\Run`, no administrator rights needed) |
+
+System-wide variants (a Windows Service, a Linux system unit with a dedicated user) are planned with the installers.
 
 ## File handling
 
@@ -164,32 +167,67 @@ The service uses each platform's native mechanism:
 
 | Data | Windows | macOS | Linux |
 | --- | --- | --- | --- |
-| Config (`config.toml`) | `%APPDATA%\Gigapair\config\` | `~/Library/Application Support/dev.gigapair.Gigapair/` | `~/.config/gigapair/` |
-| Database (contacts, queue, history) | `%LOCALAPPDATA%\Gigapair\data\` | `~/Library/Application Support/dev.gigapair.Gigapair/` | `~/.local/share/gigapair/` |
-| Logs | `%LOCALAPPDATA%\Gigapair\logs\` | `~/Library/Logs/Gigapair/` | `~/.local/state/gigapair/` |
+| Config (`config.toml`) | `%APPDATA%\gigapair\Gigapair\config\` | `~/Library/Application Support/dev.gigapair.Gigapair/` | `~/.config/gigapair/` |
+| Database (contacts, queue, history) | `%LOCALAPPDATA%\gigapair\Gigapair\data\` | `~/Library/Application Support/dev.gigapair.Gigapair/` | `~/.local/share/gigapair/` |
+| Logs | `%LOCALAPPDATA%\gigapair\Gigapair\data\logs\` | `~/Library/Logs/Gigapair/` | `~/.local/state/gigapair/` |
 | Node private key | Credential Manager | Keychain | Secret Service (GNOME Keyring, KWallet) |
 | Default downloads | `%USERPROFILE%\Downloads\Gigapair\` | `~/Downloads/Gigapair/` | `~/Downloads/Gigapair/` |
 | In-progress data | `.gigapair-partial\` in the destination folder | same | same |
 
-For a Linux system service: config in `/etc/gigapair/`, data in `/var/lib/gigapair/`, and the key in a file with `0600` permissions.
+If no keyring is available (headless servers), the key is stored in a file with `0600` permissions in the data folder; set `key_storage = "file"` to choose this explicitly.
+
+Setting the `GIGAPAIR_HOME` environment variable (or passing `--home <dir>` to `gigapair` and `gigapaird`) keeps everything under one folder instead. This is how you run two instances on one computer.
 
 ## Roadmap
 
 | Stage | Deliverable | Done when |
 | --- | --- | --- |
-| 1. Core + CLI | `gigapair-core`, `gigapaird` and CLI with pair, send, accept, status and resume | 50 GB between Windows and macOS on different networks, with two forced interruptions, identical hash |
-| 2. Minimal UI | GPUI window with contacts, drag and drop and progress | A full transfer without touching the terminal |
-| 3. Robustness | Keep-awake, persistence, queue, history, notifications, tray | Reboot mid-transfer and resume automatically |
+| 1. Core + CLI ✅ (implemented; real-network acceptance test pending) | `gigapair-core`, `gigapaird` and CLI with pair, send, accept, status and resume | 50 GB between Windows and macOS on different networks, with two forced interruptions, identical hash |
+| 2. Minimal UI ✅ (implemented) | GPUI window with contacts, drag and drop and progress | A full transfer without touching the terminal |
+| 3. Robustness 🟡 (all but the tray icon) | Keep-awake, persistence, queue, history, notifications, tray | Reboot mid-transfer and resume automatically |
 | 4. Distribution | Releases (MSI, DMG, AppImage, `.deb`), checksums, attestations, service install | Clean install on all three OSes and a headless server receiving |
 
 ## Building from source
 
-Requires a recent stable [Rust toolchain](https://rustup.rs/).
+Requires Rust 1.89 or newer ([rustup](https://rustup.rs/)).
+
+- **Windows:** install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload (MSVC and the Windows SDK).
+- **macOS:** Xcode command line tools (`xcode-select --install`).
+- **Linux (Debian/Ubuntu):** `sudo apt install libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libfontconfig-dev libxcb1-dev libx11-xcb-dev libssl-dev pkg-config`
 
 ```sh
 git clone https://github.com/dopazo/gigapair
 cd gigapair
 cargo build --release
+```
+
+This produces `gigapair-app`, `gigapair` (and `gpair`) and `gigapaird` in `target/release/`. Keep them together: the app and the CLI start `gigapaird` from the same folder when it isn't running.
+
+```sh
+cargo run --release -p gigapair-app        # desktop app
+cargo run --release -p gigapair-cli -- status
+```
+
+### Trying it on one computer
+
+Run two instances with separate data folders and pair them with each other:
+
+```sh
+target/release/gigapair --home ./demo-a pair            # shows a code, waits
+target/release/gigapair --home ./demo-b pair <code>     # in a second terminal
+target/release/gigapair --home ./demo-a send <name-of-b> <some file>
+target/release/gigapair --home ./demo-b requests
+target/release/gigapair --home ./demo-b accept <id>
+```
+
+For the app, set `GIGAPAIR_HOME` before launching it (PowerShell: `$env:GIGAPAIR_HOME = "C:\demo-a"; .\target\release\gigapair-app.exe`).
+
+### Tests
+
+```sh
+cargo test --workspace
+# Larger transfer and throughput check (generated data, nothing committed):
+GIGAPAIR_TEST_MB=4096 cargo test --release -p gigapair-core --test transfer throughput -- --ignored --nocapture
 ```
 
 The workspace contains:
