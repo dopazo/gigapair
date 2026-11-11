@@ -5,11 +5,16 @@
 //! non-clobbering final names, and lays out the in-progress area.
 
 mod collision;
+mod fsops;
 mod long_path;
 mod partial;
 mod sanitize;
 
 pub use collision::{unique_destination, unique_name};
+pub use fsops::{
+    available_space, create_unique_dir, ensure_partial_dir, move_into_unique, rename_noclobber,
+    set_mtime,
+};
 pub use long_path::{for_io, to_extended_length};
 pub use partial::{PARTIAL_DIR_NAME, partial_dir, transfer_partial_dir};
 pub use sanitize::{PathError, Platform, safe_relative_path, sanitize_component};

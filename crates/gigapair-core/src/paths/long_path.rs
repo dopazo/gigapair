@@ -40,10 +40,10 @@ fn is_drive_absolute(path: &str) -> bool {
 /// The form of `path` to hand to file system calls: extended-length on
 /// Windows, unchanged elsewhere.
 pub fn for_io(path: &Path) -> PathBuf {
-    if cfg!(windows) {
-        if let Some(s) = path.to_str() {
-            return PathBuf::from(to_extended_length(s));
-        }
+    if cfg!(windows)
+        && let Some(s) = path.to_str()
+    {
+        return PathBuf::from(to_extended_length(s));
     }
     path.to_path_buf()
 }

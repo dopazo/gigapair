@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Gigapair is a peer-to-peer app for moving very large files (50–200+ GB) between paired devices: end-to-end encrypted, BLAKE3-verified and resumable. Rust workspace, GPUI desktop UI, CLI, and a background service.
 
 - Full product spec: `spec_gigapair.md` (in Spanish). It is the source of truth for scope, requirements (RF-xx / RNF-xx) and stage plan. Cite requirement IDs in commits and PRs when relevant.
-- Current stage: **1, in progress** (workspace skeleton and `gigapair_core::paths` done). Stage 1 is `gigapair-core` + `gigapaird` + CLI. Don't start UI work before stage 1 passes its acceptance test unless asked.
+- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution) is out of scope until asked.
 
 ## Architecture
 
@@ -54,8 +54,8 @@ Pin versions for anything pre-1.0 (GPUI, gpui-component, iroh, iroh-blobs) and u
 | --- | --- |
 | Async runtime | tokio |
 | Network / identity | iroh (QUIC, Ed25519 node ID, hole punching, relay) |
-| Transfer | iroh-blobs (collections, BLAKE3 verified streaming, resume) |
-| UI | gpui + gpui-component (pinned rev) |
+| Transfer | own block protocol on iroh streams (see `docs/transfer-protocol.md`); iroh-blobs was evaluated and not used |
+| UI | gpui-kit `=0.9.1` (re-exports gpui-pre 0.3.12 + gpui-component) |
 | CLI | clap (derive) |
 | IPC | interprocess |
 | DB | rusqlite with `bundled` |
@@ -101,19 +101,20 @@ Run `cargo fmt` and `cargo clippy` before considering a change done.
 Don't build these unless asked: one-to-many/swarm transfers, cloud storage or store-and-forward, two-way folder sync, compression/transcoding, mobile apps, auto-update (only "new release available" notice), code signing.
 Dont try to search for >200 gb files unless asked, you will test it when the time comes.
 
-## Next steps (stage 1)
+## Code map
 
-Done: workspace skeleton, `gigapair_core::paths` (sanitizing peer paths, collision names, partial dir layout, Windows long paths), CI.
+- `gigapair-core`: `paths` (sanitizing, collisions, no-clobber rename, free space), `manifest` (scan + BLAKE3 hashing, 4 MiB blocks), `pairing` (codes, fingerprint), `wire` (peer protocol), `api` + `ipc` (client↔service), `db` (SQLite), `config`, `keys`, `dirs` (`GIGAPAIR_HOME`), `service` (user-level autostart), `engine/` (`net`, `pair`, `send`, `recv`, `api`).
+- `gigapaird`: IPC server, keep-awake thread (`awake.rs`), notifications (`notify.rs`), instance lock.
+- `gigapair-cli`: `lib.rs` (commands), `output.rs`, `strings.rs` (all user text).
+- `gigapair-app`: `backend.rs` (IPC on a Tokio thread), `app.rs` (the window), `qr.rs`, `strings.rs`.
+- Tests: `crates/gigapair-core/tests/transfer.rs` runs two engines over loopback (`NetworkMode::LocalOnly`), including restarts mid-transfer. `throughput` is `#[ignore]`d; size via `GIGAPAIR_TEST_MB`.
 
-Known gaps in `paths`:
+## Known gaps / next steps
 
-- **No-clobber final move.** `std::fs::rename` replaces an existing destination on every OS, so there is a race between `unique_name` and the rename. Implement a rename that fails if the target exists (Linux `renameat2(RENAME_NOREPLACE)`, macOS `renamex_np(RENAME_EXCL)`, Windows `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`), retrying with the next `unique_name` on conflict.
-- **Hidden attribute** for `.gigapair-partial` on Windows (the leading dot doesn't hide it there).
-- **Collisions within one transfer** after sanitizing (`a:b` and `a_b` both become `a_b` on Windows): resolve with `unique_name` when materializing a collection.
-
-Suggested order next:
-
-1. **Validate iroh-blobs** (spec risk #4): can it store data in `.gigapair-partial/` on the destination disk and export with a rename instead of a copy? This decides whether we need a custom store. Needs a large dependency download.
-2. Wire messages (transfer request with names/sizes/hash, accept/reject, protocol version) and the local IPC API, with `serde`.
-3. SQLite schema (contacts, queue, history) with `rusqlite` `bundled`.
-4. CLI command tree with `clap` (spec "CLI y modo servicio" table).
+1. Manual acceptance test of stage 1 across two real networks (one behind CGNAT) with relays; check `direct`/`relay` labelling and the first-relay notice.
+2. Tray icon (RF-14) is not implemented (tray-icon needs GTK on Linux; decide approach).
+3. System-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`) and "new release available" notice.
+4. Relay: the first-use notice is emitted once per install; the app shows it as a banner, the CLI prints it during `send`.
+5. No LAN discovery (iroh 1.4 has no mDNS); contacts rely on n0 DNS (relay URL only) plus stored addresses and a stable UDP port.
+6. Ticket sends to non-contacts (RF-16) not implemented.
+7. UI strings live in `strings.rs` per client; no i18n framework yet.

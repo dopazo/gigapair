@@ -8,12 +8,25 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[lib]
+name = "gigapair_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "gigapair"
 path = "src/main.rs"
 
+# Short alias.
+[[bin]]
+name = "gpair"
+path = "src/bin/gpair.rs"
+
 [dependencies]
 gigapair-core = { path = "../gigapair-core" }
+anyhow = "1"
+clap = { version = "4.6", features = ["derive"] }
+tokio = { version = "1.54", features = ["full"] }
+qrcode = { version = "0.14", default-features = false }
 
 [lints]
 workspace = true
