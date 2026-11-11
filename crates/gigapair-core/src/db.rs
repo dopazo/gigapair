@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS contacts (
     name        TEXT NOT NULL,
     auto_accept INTEGER NOT NULL DEFAULT 0,
     added_at    INTEGER NOT NULL,
-    last_seen   INTEGER
+    last_seen   INTEGER,
+    -- Last known address (JSON EndpointAddr), used alongside discovery.
+    addr        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS transfers (
@@ -51,7 +53,9 @@ CREATE TABLE IF NOT EXISTS transfers (
     relay       TEXT,
     error       TEXT,
     created_at  INTEGER NOT NULL,
-    finished_at INTEGER
+    finished_at INTEGER,
+    -- Sender: JSON list of the paths the user chose, for "retry".
+    sources     TEXT
 );
 CREATE INDEX IF NOT EXISTS transfers_status ON transfers(status);
 
@@ -62,6 +66,7 @@ CREATE TABLE IF NOT EXISTS transfer_files (
     size            INTEGER NOT NULL,
     mtime_ns        INTEGER NOT NULL,
     root_hash       TEXT,
+    blocks_hash     TEXT,
     block_hashes    BLOB,
     src_path        TEXT,
     verified_blocks INTEGER NOT NULL DEFAULT 0,
@@ -103,6 +108,7 @@ pub struct TransferRow {
     pub error: Option<String>,
     pub created_at: i64,
     pub finished_at: Option<i64>,
+    pub sources: Vec<String>,
 }
 
 /// One row of `transfer_files`.
@@ -115,6 +121,8 @@ pub struct FileRow {
     pub mtime_ns: i64,
     /// BLAKE3 of the whole file, hex.
     pub root_hash: Option<String>,
+    /// BLAKE3 of the block hash list, hex.
+    pub blocks_hash: Option<String>,
     /// Concatenated 32-byte BLAKE3 hashes of each block.
     pub block_hashes: Option<Vec<u8>>,
     /// Sender: absolute path of the source file.
@@ -228,6 +236,26 @@ impl Db {
         )? > 0)
     }
 
+    pub fn set_contact_addr(&self, node_id: &str, addr_json: &str) -> DbResult<()> {
+        self.lock().execute(
+            "UPDATE contacts SET addr = ?2 WHERE node_id = ?1",
+            params![node_id, addr_json],
+        )?;
+        Ok(())
+    }
+
+    pub fn contact_addr(&self, node_id: &str) -> DbResult<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT addr FROM contacts WHERE node_id = ?1",
+                [node_id],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
     pub fn touch_contact(&self, node_id: &str) -> DbResult<()> {
         self.lock().execute(
             "UPDATE contacts SET last_seen = ?2 WHERE node_id = ?1",
@@ -248,8 +276,9 @@ impl Db {
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT INTO transfers (id, direction, peer, peer_name, status, label, total_size, file_count,
-                                    done_bytes, dest_dir, conn_kind, relay, error, created_at, finished_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                                    done_bytes, dest_dir, conn_kind, relay, error, created_at, finished_at,
+                                    sources)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 t.id,
                 t.direction.as_str(),
@@ -266,13 +295,15 @@ impl Db {
                 t.error,
                 t.created_at,
                 t.finished_at,
+                serde_json::to_string(&t.sources).unwrap_or_else(|_| "[]".into()),
             ],
         )?;
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO transfer_files (transfer_id, idx, rel_path, size, mtime_ns, root_hash,
-                                             block_hashes, src_path, verified_blocks, done, final_path)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                             blocks_hash, block_hashes, src_path, verified_blocks, done,
+                                             final_path)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             )?;
             for f in files {
                 stmt.execute(params![
@@ -282,6 +313,7 @@ impl Db {
                     f.size as i64,
                     f.mtime_ns,
                     f.root_hash,
+                    f.blocks_hash,
                     f.block_hashes,
                     f.src_path,
                     f.verified_blocks as i64,
@@ -419,8 +451,8 @@ impl Db {
     pub fn files(&self, transfer_id: &str) -> DbResult<Vec<FileRow>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
-            "SELECT idx, rel_path, size, mtime_ns, root_hash, block_hashes, src_path, verified_blocks,
-                    done, final_path
+            "SELECT idx, rel_path, size, mtime_ns, root_hash, blocks_hash, block_hashes, src_path,
+                    verified_blocks, done, final_path
              FROM transfer_files WHERE transfer_id = ?1 ORDER BY idx",
         )?;
         let rows = stmt.query_map([transfer_id], |r| {
@@ -430,11 +462,12 @@ impl Db {
                 size: r.get::<_, i64>(2)? as u64,
                 mtime_ns: r.get(3)?,
                 root_hash: r.get(4)?,
-                block_hashes: r.get(5)?,
-                src_path: r.get(6)?,
-                verified_blocks: r.get::<_, i64>(7)? as u64,
-                done: r.get(8)?,
-                final_path: r.get(9)?,
+                blocks_hash: r.get(5)?,
+                block_hashes: r.get(6)?,
+                src_path: r.get(7)?,
+                verified_blocks: r.get::<_, i64>(8)? as u64,
+                done: r.get(9)?,
+                final_path: r.get(10)?,
             })
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -459,11 +492,13 @@ impl Db {
         transfer_id: &str,
         idx: u32,
         root_hash: &str,
+        blocks_hash: &str,
         block_hashes: &[u8],
     ) -> DbResult<()> {
         self.lock().execute(
-            "UPDATE transfer_files SET root_hash = ?3, block_hashes = ?4 WHERE transfer_id = ?1 AND idx = ?2",
-            params![transfer_id, idx, root_hash, block_hashes],
+            "UPDATE transfer_files SET root_hash = ?3, blocks_hash = ?4, block_hashes = ?5
+             WHERE transfer_id = ?1 AND idx = ?2",
+            params![transfer_id, idx, root_hash, blocks_hash, block_hashes],
         )?;
         Ok(())
     }
@@ -531,7 +566,7 @@ impl Db {
 
 const TRANSFER_SELECT: &str =
     "SELECT id, direction, peer, peer_name, status, label, total_size, file_count,
-    done_bytes, dest_dir, conn_kind, relay, error, created_at, finished_at FROM transfers";
+    done_bytes, dest_dir, conn_kind, relay, error, created_at, finished_at, sources FROM transfers";
 
 fn conn_kind_str(k: ConnKind) -> &'static str {
     match k {
@@ -588,6 +623,10 @@ fn transfer_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DbResult<Transfe
         error: r.get(12)?,
         created_at: r.get(13)?,
         finished_at: r.get(14)?,
+        sources: r
+            .get::<_, Option<String>>(15)?
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default(),
     }))
 }
 
@@ -611,6 +650,7 @@ mod tests {
             error: None,
             created_at: 1,
             finished_at: None,
+            sources: vec!["/a".into()],
         }
     }
 
@@ -621,6 +661,7 @@ mod tests {
             size: 10,
             mtime_ns: 5,
             root_hash: None,
+            blocks_hash: None,
             block_hashes: None,
             src_path: None,
             verified_blocks: 0,
@@ -683,6 +724,7 @@ mod tests {
         assert_eq!(t.status, TransferStatus::Failed);
         assert!(t.finished_at.is_some());
         assert_eq!(t.conn.unwrap().kind, ConnKind::Relay);
+        assert_eq!(t.sources, vec!["/a".to_string()]);
 
         assert_eq!(db.resolve_transfer_id("t").unwrap().len(), 2);
         assert_eq!(

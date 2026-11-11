@@ -33,9 +33,11 @@ pub enum PeerRequest {
         /// Hex-encoded one-time secret from the code.
         secret: String,
         device_name: String,
+        /// How to reach the device that sent this.
+        addr: Option<iroh::EndpointAddr>,
     },
-    /// Reachability check; also refreshes "last seen".
-    Ping,
+    /// Reachability check; also refreshes "last seen" and the address.
+    Ping { addr: Option<iroh::EndpointAddr> },
     /// The sender removed us as a contact.
     Unpair,
     /// Sender → receiver: please accept these files.

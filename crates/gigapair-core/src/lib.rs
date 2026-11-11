@@ -4,6 +4,7 @@ pub mod api;
 pub mod config;
 pub mod db;
 pub mod dirs;
+pub mod engine;
 pub mod ipc;
 pub mod keys;
 pub mod manifest;
