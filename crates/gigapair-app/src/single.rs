@@ -44,7 +44,9 @@ pub fn claim(dirs: &AppDirs) -> Instance {
         Err(e) => {
             // Not fatal: the app works, it just can't be raised by a
             // second launch.
-            eprintln!("warning: could not listen on {addr}: {e}");
+            tracing::warn!(
+                "could not listen on {addr}: {e}; a second launch can't show this window"
+            );
             None
         }
     };

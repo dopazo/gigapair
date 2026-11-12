@@ -70,6 +70,8 @@ pub const SETTINGS_DISCOVERY: &str =
 pub const SETTINGS_RELAY: &str = "Custom relay URL (empty: public n0 relays)";
 pub const SETTINGS_LIMIT: &str = "Upload limit in KiB/s (0: unlimited)";
 pub const SETTINGS_NODE: &str = "This device's id";
+pub const SETTINGS_LOGS: &str = "Logs folder";
+pub const LOGS_NOTE: &str = "Logs of the service and the app, one file per day, the last 7 days. They stay on this computer and contain no keys or pairing codes; attach them when reporting a problem.";
 pub const RESTART_NOTE: &str = "Some changes apply after the service restarts.";
 
 pub fn incoming_request(name: &str, label: &str, bytes: u64) -> String {
@@ -119,3 +121,4 @@ pub fn tray_requests(n: usize) -> String {
         format!("{n} requests waiting")
     }
 }
+pub const OPEN: &str = "Open";

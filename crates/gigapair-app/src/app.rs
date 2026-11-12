@@ -54,6 +54,8 @@ pub struct GigapairApp {
     relay_banner: Option<String>,
     remove_armed: bool,
     start_at_login: Option<bool>,
+    /// Where the service and the app write their log files.
+    logs_dir: Option<PathBuf>,
     code_input: Entity<InputState>,
     pair_name_inputs: HashMap<String, Entity<InputState>>,
     rename_input: Entity<InputState>,
@@ -103,6 +105,7 @@ impl GigapairApp {
             relay_banner: None,
             remove_armed: false,
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
+            logs_dir: AppDirs::from_env().ok().map(|d| d.logs),
             code_input: input(s::CODE_PLACEHOLDER, window, cx),
             pair_name_inputs: HashMap::new(),
             rename_input: input(s::NAME_PLACEHOLDER, window, cx),
@@ -141,6 +144,7 @@ impl GigapairApp {
     }
 
     fn notify_error(&mut self, msg: String, window: &mut Window, cx: &mut Context<Self>) {
+        tracing::warn!("shown to the user: {msg}");
         window.push_notification(Notification::error(msg), cx);
         cx.notify();
     }
@@ -1281,6 +1285,7 @@ impl GigapairApp {
             .as_ref()
             .map(|st| st.node_id.clone())
             .unwrap_or_default();
+        let logs = self.logs_dir.clone();
         let (device, relay, limit) = (
             self.device_input.clone(),
             self.relay_input.clone(),
@@ -1403,6 +1408,36 @@ impl GigapairApp {
                     .text_xs()
                     .text_color(theme.muted_foreground)
                     .child(s::RESTART_NOTE),
+            )
+            .child(row(s::SETTINGS_LOGS))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div().flex_1().text_sm().truncate().child(
+                            logs.as_ref()
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_default(),
+                        ),
+                    )
+                    .child(
+                        Button::new("open-logs")
+                            .label(s::OPEN)
+                            .small()
+                            .disabled(logs.is_none())
+                            .on_click(move |_, _, cx| {
+                                if let Some(p) = &logs {
+                                    tracing::info!("opening the logs folder");
+                                    cx.open_with_system(p);
+                                }
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(s::LOGS_NOTE),
             )
             .child(row(s::SETTINGS_NODE))
             .child(

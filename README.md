@@ -180,6 +180,12 @@ System-wide variants (a Windows Service, a Linux system unit with a dedicated us
 
 If no keyring is available (headless servers), the key is stored in a file with `0600` permissions in the data folder; set `key_storage = "file"` to choose this explicitly.
 
+### Logs
+
+The service and the desktop app each write one file per day to the logs folder (`gigapaird.YYYY-MM-DD.log` and `gigapair-app.YYYY-MM-DD.log`), keeping the last 7 days. Crashes are recorded there too, with a backtrace. `gigapair logs` prints the folder and its newest files, and **Settings → Logs folder → Open** opens it. Logs never leave the computer and never contain keys or pairing codes: attach them when reporting a problem.
+
+For more detail, set `GIGAPAIR_LOG` before starting the service or the app, for example `GIGAPAIR_LOG=debug` (PowerShell: `$env:GIGAPAIR_LOG = "debug"`), or `info,gigapair_core=debug` for only Gigapair's own messages. A service that is already running keeps its level until it is restarted. `gigapair-app --verbose` and `gigapaird --verbose` also print the log to the terminal.
+
 Setting the `GIGAPAIR_HOME` environment variable (or passing `--home <dir>` to `gigapair` and `gigapaird`) keeps everything under one folder instead. This is how you run two instances on one computer.
 
 ## Roadmap

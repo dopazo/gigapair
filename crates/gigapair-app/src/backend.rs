@@ -38,6 +38,7 @@ impl Backend {
                 {
                     Ok(r) => r,
                     Err(e) => {
+                        tracing::error!("could not start the IPC runtime: {e}");
                         let _ = ev_tx.send(BackendMsg::Disconnected(e.to_string()));
                         return;
                     }

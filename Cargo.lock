@@ -2465,6 +2465,7 @@ dependencies = [
  "ksni",
  "qrcode",
  "tokio",
+ "tracing",
  "tray-icon",
 ]
 
@@ -2501,6 +2502,8 @@ dependencies = [
  "tokio-util",
  "toml 1.2.1+spec-1.1.0",
  "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "windows-sys 0.61.2",
 ]
 
@@ -2515,8 +2518,6 @@ dependencies = [
  "notify-rust",
  "tokio",
  "tracing",
- "tracing-appender",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -25,6 +25,8 @@ use crate::tray::{Tray, TrayAction, TrayView, summarize};
 pub struct Shell {
     backend: Backend,
     connected: bool,
+    /// Last reason the service could not be reached, to log it once.
+    last_disconnect: Option<String>,
     /// The `close_to_tray` setting; on until the service says otherwise.
     close_to_tray: bool,
     tray: Option<Tray>,
@@ -50,12 +52,15 @@ pub fn start(dirs: AppDirs, single: Primary, background: bool, cx: &mut App) {
 
     let (actions, mut action_rx) = mpsc::unbounded_channel::<TrayAction>();
     if let Err(e) = single.listen(actions.clone()) {
-        eprintln!("warning: {e}");
+        tracing::warn!("single-instance listener: {e}");
     }
     let tray = match Tray::new(actions) {
-        Ok(t) => Some(t),
+        Ok(t) => {
+            tracing::info!("tray icon ready");
+            Some(t)
+        }
         Err(e) => {
-            eprintln!("note: no tray icon ({e}); closing the window quits the app");
+            tracing::warn!("no tray icon ({e}); closing the window quits the app");
             None
         }
     };
@@ -63,6 +68,7 @@ pub fn start(dirs: AppDirs, single: Primary, background: bool, cx: &mut App) {
     cx.set_global(Shell {
         backend,
         connected: false,
+        last_disconnect: None,
         close_to_tray: true,
         tray,
         shown: None,
@@ -80,9 +86,13 @@ pub fn start(dirs: AppDirs, single: Primary, background: bool, cx: &mut App) {
 
     cx.spawn(async move |cx| {
         while let Some(action) = action_rx.recv().await {
+            tracing::debug!(?action, "tray action");
             cx.update(|cx| match action {
                 TrayAction::Open => show_window(cx),
-                TrayAction::Quit => cx.quit(),
+                TrayAction::Quit => {
+                    tracing::info!("quit from the tray; the service keeps running");
+                    cx.quit();
+                }
             });
         }
     })
@@ -94,7 +104,10 @@ pub fn start(dirs: AppDirs, single: Primary, background: bool, cx: &mut App) {
         }
         let shell = cx.global_mut::<Shell>();
         shell.window = None;
-        if !(shell.tray.is_some() && shell.close_to_tray) {
+        if shell.tray.is_some() && shell.close_to_tray {
+            tracing::info!("window closed; staying in the tray");
+        } else {
+            tracing::info!("window closed; quitting (the service keeps running)");
             cx.quit();
         }
     })
@@ -140,6 +153,7 @@ pub fn show_window(cx: &mut App) {
     });
     match opened {
         Ok((handle, app)) => {
+            tracing::info!("window opened");
             cx.global_mut::<Shell>().window = Some((handle, app.downgrade()));
             if connected {
                 forward(BackendMsg::Connected, cx);
@@ -147,7 +161,7 @@ pub fn show_window(cx: &mut App) {
             cx.activate(true);
         }
         Err(e) => {
-            eprintln!("error: could not open the window: {e}");
+            tracing::error!("could not open the window: {e:#}");
             if !cx.global::<Shell>().has_tray() {
                 cx.quit();
             }
@@ -157,17 +171,28 @@ pub fn show_window(cx: &mut App) {
 
 /// The window changed the `close_to_tray` setting.
 pub fn set_close_to_tray(on: bool, cx: &mut App) {
-    cx.global_mut::<Shell>().close_to_tray = on;
+    let shell = cx.global_mut::<Shell>();
+    if shell.close_to_tray != on {
+        tracing::info!(close_to_tray = on, "close button setting changed");
+        shell.close_to_tray = on;
+    }
 }
 
 fn on_backend(msg: BackendMsg, cx: &mut App) {
     let shell = cx.global_mut::<Shell>();
     match &msg {
         BackendMsg::Connected => {
+            tracing::info!("connected to the service");
             shell.connected = true;
+            shell.last_disconnect = None;
         }
-        BackendMsg::Disconnected(_) => {
+        BackendMsg::Disconnected(reason) => {
+            // Reconnection is retried every 2 s: log each new reason once.
+            if shell.connected || shell.last_disconnect.as_ref() != Some(reason) {
+                tracing::warn!("not connected to the service: {reason}");
+            }
             shell.connected = false;
+            shell.last_disconnect = Some(reason.clone());
             shell.transfers.clear();
         }
         BackendMsg::Event(ev) => {

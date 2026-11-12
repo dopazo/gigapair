@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     };
     dirs.create_all()
         .with_context(|| format!("could not create {}", dirs.data.display()))?;
-    let _log_guard = init_logging(&dirs, args.verbose);
+    let _log_guard = gigapair_core::logging::init(&dirs, "gigapaird", args.verbose);
 
     let runtime = tokio::runtime::Runtime::new()?;
     let result = runtime.block_on(run(dirs));
@@ -48,28 +48,6 @@ fn main() -> Result<()> {
         tracing::error!("{e:#}");
     }
     result
-}
-
-fn init_logging(dirs: &AppDirs, verbose: bool) -> tracing_appender::non_blocking::WorkerGuard {
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-    let file = tracing_appender::rolling::Builder::new()
-        .rotation(tracing_appender::rolling::Rotation::DAILY)
-        .filename_prefix("gigapaird")
-        .filename_suffix("log")
-        .max_log_files(7)
-        .build(&dirs.logs)
-        .unwrap_or_else(|_| tracing_appender::rolling::never(&dirs.logs, "gigapaird.log"));
-    let (writer, guard) = tracing_appender::non_blocking(file);
-    let filter = EnvFilter::try_from_env("GIGAPAIR_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info,iroh=warn,noq=warn,noq_proto=warn"));
-    let file_layer = fmt::layer().with_writer(writer).with_ansi(false);
-    let stderr_layer = verbose.then(|| fmt::layer().with_writer(std::io::stderr));
-    let _ = tracing_subscriber::registry()
-        .with(filter)
-        .with(file_layer)
-        .with(stderr_layer)
-        .try_init();
-    guard
 }
 
 /// Holds an exclusive lock on the data folder for the life of the
