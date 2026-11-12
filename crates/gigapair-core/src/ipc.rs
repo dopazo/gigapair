@@ -298,6 +298,7 @@ pub fn spawn_service(dirs: &AppDirs) -> io::Result<()> {
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+        stop_std_handle_inheritance();
     }
     #[cfg(unix)]
     {
@@ -307,6 +308,33 @@ pub fn spawn_service(dirs: &AppDirs) -> io::Result<()> {
     }
     cmd.spawn()?;
     Ok(())
+}
+
+/// Windows starts every child with all inheritable handles of the parent,
+/// even when its stdio is redirected to NUL. If this process' stdout is a
+/// pipe (`$s = gigapair status`, `gigapair status | more`), the long-lived
+/// service would keep the pipe open and whoever reads it would wait until
+/// the service exits. Clearing the inherit flag on our std handles avoids
+/// that; `Stdio::inherit` for later children duplicates them anyway.
+#[cfg(windows)]
+fn stop_std_handle_inheritance() {
+    use windows_sys::Win32::Foundation::{
+        HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, SetHandleInformation,
+    };
+    use windows_sys::Win32::System::Console::{
+        GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    };
+    for which in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+        // SAFETY: GetStdHandle has no preconditions; SetHandleInformation
+        // only changes a flag on a handle this process owns, and fails
+        // harmlessly on null or invalid handles (no console, GUI apps).
+        unsafe {
+            let h = GetStdHandle(which);
+            if !h.is_null() && h != INVALID_HANDLE_VALUE {
+                SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0);
+            }
+        }
+    }
 }
 
 /// Connects to the service, starting it first if it isn't running.

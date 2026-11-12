@@ -349,10 +349,15 @@ pub(super) fn handle_decision(
         return PeerResponse::Ok;
     }
     if accepted {
-        if row.status == TransferStatus::WaitingAccept {
+        // A receiver that restarts repeats its decision; don't hide that
+        // data is already flowing.
+        if matches!(
+            row.status,
+            TransferStatus::WaitingAccept | TransferStatus::Queued
+        ) {
             inner.set_status(id, TransferStatus::Queued);
+            inner.set_note(id, Some(format!("Accepted; waiting for {}", row.peer_name)));
         }
-        inner.set_note(id, Some(format!("Accepted; waiting for {}", row.peer_name)));
     } else {
         inner.stop_task(id);
         let reason = reason.unwrap_or_else(|| format!("Rejected by {}", row.peer_name));
@@ -547,14 +552,18 @@ pub(super) async fn serve_get(
         &serving,
     )
     .await;
-    {
+    // A stream from a dead connection can end long after the receiver came
+    // back and opened a new one; only the current stream may touch status.
+    let current = {
         let mut live = inner.live();
-        if let Some(l) = live.get_mut(id)
-            && l.serving.as_ref().is_some_and(|(g, _)| *g == serving_gen)
-        {
-            l.serving = None;
+        match live.get_mut(id) {
+            Some(l) if l.serving.as_ref().is_some_and(|(g, _)| *g == serving_gen) => {
+                l.serving = None;
+                true
+            }
+            _ => false,
         }
-    }
+    };
     let finished = result.is_ok();
     if finished {
         let _ = send.finish();
@@ -562,7 +571,9 @@ pub(super) async fn serve_get(
         let _ = tokio::time::timeout(Duration::from_secs(30), send.stopped()).await;
     }
     inner.flush_progress(id);
-    if let Ok(Some(r)) = inner.db.transfer(id)
+    if current
+        && inner.live().get(id).is_none_or(|l| l.serving.is_none())
+        && let Ok(Some(r)) = inner.db.transfer(id)
         && r.status == TransferStatus::Transferring
     {
         inner.set_status(id, TransferStatus::Queued);
