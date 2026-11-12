@@ -14,6 +14,7 @@ mod qr;
 mod shell;
 mod single;
 mod strings;
+mod style;
 mod tray;
 
 use gigapair_core::dirs::AppDirs;
@@ -53,11 +54,12 @@ pub fn main() {
         }
     };
 
-    let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+    let app = gpui_kit::application().with_assets(style::Assets);
     // macOS: clicking the Dock icon while only the tray is left.
     app.on_reopen(shell::show_window);
     app.run(move |cx: &mut App| {
         gpui_kit::init(cx);
+        style::install(cx);
         shell::start(dirs, primary, background, cx);
     });
     tracing::info!("Gigapair app closed");
