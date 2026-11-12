@@ -205,7 +205,7 @@ Setting the `GIGAPAIR_HOME` environment variable (or passing `--home <dir>` to `
 
 ## Building from source
 
-Requires Rust 1.90 or newer ([rustup](https://rustup.rs/)).
+Requires Rust 1.95 or newer ([rustup](https://rustup.rs/)).
 
 - **Windows:** install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload (MSVC and the Windows SDK).
 - **macOS:** Xcode command line tools (`xcode-select --install`).
