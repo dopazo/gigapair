@@ -293,7 +293,7 @@ body {
 /* watches: ruled rows, columns aligned like a table */
 .list { display: grid; }
 .trow {
-  display: grid; grid-template-columns: 22px minmax(0, 1fr) 150px 112px 74px 132px; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 1fr) 150px 112px 74px 132px; gap: 14px; align-items: center;
   padding: 8px 2px; border-top: 1px solid var(--line);
 }
 .list .trow:last-child { border-bottom: 1px solid var(--line); }
@@ -306,7 +306,10 @@ body {
 .trow .rate { color: var(--ink-2); font-size: 12px; display: grid; justify-items: end; line-height: 1.3; }
 .trow .rate b { color: var(--ink); font-weight: 600; }
 .trow .acts { display: flex; gap: 2px; justify-content: flex-end; }
-.trow .note { grid-column: 2 / -1; margin-top: -2px; }
+.trow .note { grid-column: 1 / -1; margin-top: -2px; }
+.group-label { margin: 10px 0 0; display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.group-label svg { width: 15px; height: 15px; }
+.group-label .count { color: var(--ink-3); font-weight: 400; }
 .trow.dim .fname { color: var(--ink-2); }
 
 /* ---------- before / after ---------- */
@@ -553,39 +556,40 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
 
           <h5 class="zone-label">Incoming requests</h5>
           <div class="ask-band">
-            <span class="dir"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="8" y="8" width="7" height="7" rx="1" fill="var(--signal)"/><path d="M1.5 1.5 L6.5 6.5 M2 6.5 H6.5 V2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <span class="dir"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 1 V8 M4.5 4.5 L8 8 L11.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
             <span class="q"><b>Studio Mac</b> wants to send you <b>photo-library-2025.zip</b> <span class="num">860 MB</span></span>
             <button class="btn danger" type="button">Reject</button>
             <button class="btn" type="button">Accept to…</button>
             <button class="btn primary" type="button">Accept</button>
           </div>
 
-          <h5 class="zone-label">Transfers</h5>
+          <h5 class="group-label"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 8.5 V1.5 M4.5 5 L8 1.5 L11.5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Sending to Studio Mac</span><span class="count">2</span></h5>
           <div class="list">
             <div class="trow" id="tcard">
-              <span class="dir" title="Sending"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="8" width="7" height="7" rx="1" fill="var(--signal)"/><path d="M9.5 6.5 L14.5 1.5 M10 1.5 H14.5 V6" fill="none" stroke="var(--ink)" stroke-width="1.6"/></svg></span>
-              <span class="what"><span class="fname">Season 2 raw footage</span><span class="sub"><span id="tstatus">sending, 2 files</span><span class="tag" id="conntag"></span></span></span>
+              <span class="what"><span class="fname">Season 2 raw footage</span><span class="sub"><span id="tstatus">2 files</span><span class="tag" id="conntag"></span></span></span>
               <span class="strip" id="strip" role="img" aria-label="Transfer progress in blocks"></span>
               <span class="amt big num" id="amount">1.1 <small>of 3.2 GB</small></span>
               <span class="rate num"><b id="speed">96.4 MB/s</b><span id="eta"><b>22 s</b> left</span></span>
               <span class="acts"><button class="btn" type="button">Pause</button><button class="btn quiet" type="button">Cancel</button></span>
               <span class="note" id="note" hidden></span>
             </div>
-            <div class="trow">
-              <span class="dir" title="Receiving"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="8" y="8" width="7" height="7" rx="1" fill="var(--signal)"/><path d="M1.5 1.5 L6.5 6.5 M2 6.5 H6.5 V2" fill="none" stroke="var(--ink)" stroke-width="1.6"/></svg></span>
-              <span class="what"><span class="fname">B-cam interviews.mov</span><span class="sub">receiving, paused by you <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
-              <span class="strip paused" data-p="0.72" role="img" aria-label="72 percent verified"></span>
-              <span class="amt big num">41.7 <small>of 58.0 GB</small></span>
-              <span class="rate">Paused</span>
-              <span class="acts"><button class="btn" type="button">Resume</button><button class="btn quiet" type="button">Cancel</button></span>
-            </div>
             <div class="trow dim">
-              <span class="dir" title="Sending, waiting"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.7" y="8.7" width="5.6" height="5.6" rx="1" fill="none" stroke="var(--ink-3)" stroke-width="1.4"/><path d="M9.5 6.5 L14.5 1.5 M10 1.5 H14.5 V6" fill="none" stroke="var(--ink-3)" stroke-width="1.6"/></svg></span>
-              <span class="what"><span class="fname">Grading LUTs</span><span class="sub">sending, waiting for Studio Mac to accept</span></span>
+              <span class="what"><span class="fname">Grading LUTs</span><span class="sub">waiting for Studio Mac to accept</span></span>
               <span></span>
               <span class="amt big num">2.4 <small>GB</small></span>
               <span class="rate"></span>
               <span class="acts"><button class="btn quiet" type="button">Cancel</button></span>
+            </div>
+          </div>
+
+          <h5 class="group-label"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 1 V8 M4.5 4.5 L8 8 L11.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>Receiving from Studio Mac</span><span class="count">1</span></h5>
+          <div class="list">
+            <div class="trow">
+              <span class="what"><span class="fname">B-cam interviews.mov</span><span class="sub">paused by you, into Downloads <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+              <span class="strip paused" data-p="0.72" role="img" aria-label="72 percent verified"></span>
+              <span class="amt big num">41.7 <small>of 58.0 GB</small></span>
+              <span class="rate">Paused</span>
+              <span class="acts"><button class="btn" type="button">Resume</button><button class="btn quiet" type="button">Cancel</button></span>
             </div>
           </div>
         </main>
@@ -607,7 +611,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       <tbody>
         <tr><td>What stays</td><td colspan="2" style="color:#17181C">Every control and every piece of information the app shows today stays on screen: contacts and their state, auto-accept, rename, remove, the device id, the drop zone with both pickers, Accept / Accept to… / Reject, the connection type with the relay's name, bytes, speed, time left, Pause, Cancel, notes and errors, History, Settings and the keep-awake state. Only how they look changes.</td></tr>
         <tr><td>Identity</td><td>No accent colour; primary buttons are plain white or black. Placeholder icon (blue square, two dots).</td><td>The mark in the title bar, sidebar, tray and installer; signal yellow only for the primary action and verified data.</td></tr>
-        <tr><td>Zones</td><td>The drop zone, each request and each transfer are bordered boxes of the same shape, so sending, deciding and watching look alike.</td><td>Three forms for three jobs: a dashed target to drop onto (send), an inverted band that asks a question (incoming requests), and a ruled list with aligned columns to watch (transfers). A small glyph on each row shows the direction: an arrow out of a block when sending, into a block when receiving.</td></tr>
+        <tr><td>Zones</td><td>The drop zone, each request and each transfer are bordered boxes of the same shape, so sending, deciding and watching look alike.</td><td>Three forms for three jobs: a dashed target to drop onto (send), an inverted band that asks a question (incoming requests), and a ruled list with aligned columns to watch (transfers). Transfers are split into "Sending to" and "Receiving from" groups, each headed by an upload or download arrow over a block.</td></tr>
         <tr><td>Contact header</td><td>"Remove contact" is a filled red button, the loudest thing on the page; the rename field is always open.</td><td>"Remove contact" as red text (still asks for a second click); "Rename" is a button that opens the field in place. The device id stays, in a smaller line.</td></tr>
         <tr><td>Connection</td><td>"Direct" in green text on a green tag, hard to read; relay is the same tag in yellow.</td><td>A neutral tag with a link glyph: solid for direct, dashed for relay, plus the relay's name. Shape carries the meaning, not colour.</td></tr>
         <tr><td>Drop zone</td><td>A tall empty dashed box.</td><td>One row, with an empty strip of blocks like the progress strip; the blocks fill one after another while you drag something over it.</td></tr>
@@ -673,7 +677,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       eta.innerHTML = p >= 1 ? '<b>Verifying</b>' : `<b>${secs >= 60 ? Math.floor(secs/60) + ' min ' + (secs%60) + ' s' : secs + ' s'}</b> left`;
     }
     conntag.innerHTML = linkSvg(conn) + (conn === 'direct' ? 'Direct' : 'Via relay (use1-1.relay.n0.iroh.link)');
-    tstatus.textContent = cut ? 'sending, waiting for Studio Mac' : 'sending, 2 files';
+    tstatus.textContent = cut ? 'waiting for Studio Mac to reconnect' : '2 files';
     if (cut) {
       note.hidden = false; note.className = 'note warn';
       note.textContent = `Connection lost. ${verified} of ${CELLS} parts are verified and kept; sending resumes from there.`;
