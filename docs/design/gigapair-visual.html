@@ -264,6 +264,43 @@ body {
 .note.warn { color: var(--danger); }
 .done-row { display: flex; align-items: center; gap: 10px; padding: 6px 12px; color: var(--ink-2); font-size: 12px; }
 .done-row .fname { color: var(--ink); font-weight: 500; }
+/* Three zones, three forms: a dashed target you drop onto, an inverted
+   band that asks you something, and a ruled list you only watch. */
+.zone-label { margin: 8px 0 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3); display: flex; gap: 8px; align-items: baseline; }
+
+/* asks: ink band (paper band in dark mode) */
+.ask-band {
+  background: var(--ink); color: var(--bg); border-radius: 8px;
+  display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 12px;
+}
+.ask-band .dir { color: var(--signal); }
+.ask-band .q { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-band .q b { font-weight: 600; }
+.ask-band .q span { opacity: .7; }
+.ask-band .btn { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
+.ask-band .btn.danger { border-color: transparent; color: #FF8A8D; }
+.ask-band .btn.primary { background: var(--signal); color: var(--signal-ink); border-color: transparent; }
+[data-theme="dark"] .ask-band .btn.danger { color: #C9282E; }
+[data-theme="dark"] .ask-band .dir { color: #17181C; }
+
+/* watches: ruled rows, columns aligned like a table */
+.list { display: grid; }
+.trow {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) 150px 112px 74px 132px; gap: 14px; align-items: center;
+  padding: 8px 2px; border-top: 1px solid var(--line);
+}
+.list .trow:last-child { border-bottom: 1px solid var(--line); }
+.trow .dir svg { width: 22px; height: 12px; display: block; }
+.trow .what { min-width: 0; }
+.trow .what .fname { display: block; }
+.trow .what .sub { display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+.trow .strip { height: 7px; }
+.trow .amt { text-align: right; }
+.trow .rate { color: var(--ink-2); font-size: 12px; display: grid; justify-items: end; line-height: 1.3; }
+.trow .rate b { color: var(--ink); font-weight: 600; }
+.trow .acts { display: flex; gap: 2px; justify-content: flex-end; }
+.trow .note { grid-column: 2 / -1; margin-top: -2px; }
+.trow.dim .fname { color: var(--ink-2); }
 
 /* ---------- before / after ---------- */
 .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -499,54 +536,45 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
                 <rect class="payload" x="41" y="8" width="10" height="10" rx="1.5" fill="var(--signal)"/>
               </svg>
             </div>
-            <div class="drop-title">Drop files or folders here</div>
+            <div class="drop-title">Drop files or folders here to send them to Studio Mac</div>
             <div class="ask"><button class="btn" type="button">Choose files…</button><button class="btn" type="button">Choose folder…</button></div>
           </div>
 
-          <h5 class="section-title">Incoming requests</h5>
-          <div class="card">
-            <div class="row">
-              <div class="grow"><span class="fname">photo-library-2025.zip</span><span class="sub">from Studio Mac, awaiting your answer</span></div>
-              <span class="big num">860 <small>MB</small></span>
-              <button class="btn danger" type="button">Reject</button>
-              <button class="btn" type="button">Accept to…</button>
-              <button class="btn primary" type="button">Accept</button>
-            </div>
+          <h5 class="zone-label">Incoming requests</h5>
+          <div class="ask-band">
+            <span class="dir"><svg viewBox="0 0 26 14" width="22" height="12" aria-hidden="true"><path d="M5 1 A4.5 6 0 0 0 5 13 Z" fill="currentColor"/><path d="M21 1 A4.5 6 0 0 1 21 13 Z" fill="currentColor" opacity=".45"/><rect x="7" y="4.5" width="5" height="5" rx="1" fill="currentColor"/></svg></span>
+            <span class="q"><b>Studio Mac</b> wants to send you <b>photo-library-2025.zip</b> <span class="num">860 MB</span></span>
+            <button class="btn danger" type="button">Reject</button>
+            <button class="btn" type="button">Accept to…</button>
+            <button class="btn primary" type="button">Accept</button>
           </div>
 
-          <h5 class="section-title">Transfers</h5>
-          <div class="card" id="tcard">
-            <div class="row">
-              <div class="grow"><span class="fname">Season 2 raw footage</span><span class="sub" id="tstatus">sending, 2 files</span></div>
-              <span class="tag" id="conntag"></span>
-              <span class="big num" id="amount">1.1 <small>of 3.2 GB</small></span>
+          <h5 class="zone-label">Transfers</h5>
+          <div class="list">
+            <div class="trow" id="tcard">
+              <span class="dir" title="Sending"><svg viewBox="0 0 26 14" aria-hidden="true"><path d="M5 1 A4.5 6 0 0 0 5 13 Z" fill="var(--ink-3)"/><path d="M21 1 A4.5 6 0 0 1 21 13 Z" fill="var(--ink)"/><rect x="14" y="4.5" width="5" height="5" rx="1" fill="var(--signal)"/></svg></span>
+              <span class="what"><span class="fname">Season 2 raw footage</span><span class="sub"><span id="tstatus">sending, 2 files</span><span class="tag" id="conntag"></span></span></span>
+              <span class="strip" id="strip" role="img" aria-label="Transfer progress in blocks"></span>
+              <span class="amt big num" id="amount">1.1 <small>of 3.2 GB</small></span>
+              <span class="rate num"><b id="speed">96.4 MB/s</b><span id="eta"><b>22 s</b> left</span></span>
+              <span class="acts"><button class="btn" type="button">Pause</button><button class="btn quiet" type="button">Cancel</button></span>
+              <span class="note" id="note" hidden></span>
             </div>
-            <div class="strip" id="strip" role="img" aria-label="Transfer progress in blocks"></div>
-            <div class="row">
-              <div class="stats num"><span><b id="speed">96.4 MB/s</b></span><span id="eta"><b>22 s</b> left</span></div>
-              <button class="btn" type="button">Pause</button>
-              <button class="btn quiet" type="button">Cancel</button>
+            <div class="trow">
+              <span class="dir" title="Receiving"><svg viewBox="0 0 26 14" aria-hidden="true"><path d="M5 1 A4.5 6 0 0 0 5 13 Z" fill="var(--ink)"/><path d="M21 1 A4.5 6 0 0 1 21 13 Z" fill="var(--ink-3)"/><rect x="7" y="4.5" width="5" height="5" rx="1" fill="var(--signal)"/></svg></span>
+              <span class="what"><span class="fname">B-cam interviews.mov</span><span class="sub">receiving, paused by you <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+              <span class="strip paused" data-p="0.72" role="img" aria-label="72 percent verified"></span>
+              <span class="amt big num">41.7 <small>of 58.0 GB</small></span>
+              <span class="rate">Paused</span>
+              <span class="acts"><button class="btn" type="button">Resume</button><button class="btn quiet" type="button">Cancel</button></span>
             </div>
-            <div class="note" id="note" hidden></div>
-          </div>
-          <div class="card">
-            <div class="row">
-              <div class="grow"><span class="fname">B-cam interviews.mov</span><span class="sub">receiving, paused by you</span></div>
-              <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span>
-              <span class="big num">41.7 <small>of 58.0 GB</small></span>
-            </div>
-            <div class="strip paused" data-p="0.72" role="img" aria-label="72 percent verified"></div>
-            <div class="row">
-              <div class="stats num"><span>Paused</span></div>
-              <button class="btn" type="button">Resume</button>
-              <button class="btn quiet" type="button">Cancel</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="row">
-              <div class="grow"><span class="fname">Grading LUTs</span><span class="sub">sending, waiting for Studio Mac to accept</span></div>
-              <span class="big num">2.4 <small>GB</small></span>
-              <button class="btn quiet" type="button">Cancel</button>
+            <div class="trow dim">
+              <span class="dir" title="Sending"><svg viewBox="0 0 26 14" aria-hidden="true"><path d="M5 1 A4.5 6 0 0 0 5 13 Z" fill="var(--ink-3)"/><path d="M21 1 A4.5 6 0 0 1 21 13 Z" fill="var(--ink)"/><rect x="14" y="4.5" width="5" height="5" rx="1" fill="none" stroke="var(--ink-3)" stroke-width="1.2"/></svg></span>
+              <span class="what"><span class="fname">Grading LUTs</span><span class="sub">sending, waiting for Studio Mac to accept</span></span>
+              <span></span>
+              <span class="amt big num">2.4 <small>GB</small></span>
+              <span class="rate"></span>
+              <span class="acts"><button class="btn quiet" type="button">Cancel</button></span>
             </div>
           </div>
         </main>
@@ -568,10 +596,11 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       <tbody>
         <tr><td>What stays</td><td colspan="2" style="color:#17181C">Every control and every piece of information the app shows today stays on screen: contacts and their state, auto-accept, rename, remove, the device id, the drop zone with both pickers, Accept / Accept to… / Reject, the connection type with the relay's name, bytes, speed, time left, Pause, Cancel, notes and errors, History, Settings and the keep-awake state. Only how they look changes.</td></tr>
         <tr><td>Identity</td><td>No accent colour; primary buttons are plain white or black. Placeholder icon (blue square, two dots).</td><td>The mark in the title bar, sidebar, tray and installer; signal yellow only for the primary action and verified data.</td></tr>
+        <tr><td>Zones</td><td>The drop zone, each request and each transfer are bordered boxes of the same shape, so sending, deciding and watching look alike.</td><td>Three forms for three jobs: a dashed target to drop onto (send), an inverted band that asks a question (incoming requests), and a ruled list with aligned columns to watch (transfers). A small glyph on each row shows which way the block travels.</td></tr>
         <tr><td>Contact header</td><td>"Remove contact" is a filled red button, the loudest thing on the page; the rename field is always open.</td><td>"Remove contact" as red text (still asks for a second click); "Rename" is a button that opens the field in place. The device id stays, in a smaller line.</td></tr>
         <tr><td>Connection</td><td>"Direct" in green text on a green tag, hard to read; relay is the same tag in yellow.</td><td>A neutral tag with a link glyph: solid for direct, dashed for relay, plus the relay's name. Shape carries the meaning, not colour.</td></tr>
         <tr><td>Drop zone</td><td>A tall empty dashed box.</td><td>Shorter, with the pair drawn in it; the block travels only while you drag something over it.</td></tr>
-        <tr><td>Progress</td><td>A thin bar; amounts, status, speed and ETA in one small grey line joined with "·".</td><td>The amount set large, a strip of verified blocks that shows what survives a cut, speed and time left on their own line.</td></tr>
+        <tr><td>Progress</td><td>A thin bar; amounts, status, speed and ETA in one small grey line joined with "·".</td><td>One row per transfer: name and connection, a strip of verified blocks that shows what survives a cut, the amount, speed and time left, and the actions, each in its own column.</td></tr>
         <tr><td>Sidebar</td><td>Centred History and Settings under a full-width button; bright green "Preventing sleep" bar; low-contrast yellow badge.</td><td>"Add contact" as the last row of the list; left-aligned History and Settings with icons; "Preventing sleep" as a quiet line with an icon; badge in ink on yellow.</td></tr>
         <tr><td>Type</td><td>Segoe UI (system default).</td><td>Archivo, bundled with the app (OFL licence); wide width for amounts, tabular figures.</td></tr>
       </tbody>
