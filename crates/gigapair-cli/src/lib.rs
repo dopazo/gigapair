@@ -106,6 +106,8 @@ enum Command {
         #[command(subcommand)]
         action: ServiceCmd,
     },
+    /// Show where the log files are (service and desktop app).
+    Logs,
 }
 
 #[derive(Subcommand)]
@@ -170,6 +172,31 @@ pub fn main() -> ExitCode {
     }
 }
 
+/// Prints the logs folder and its newest files. Works without the service.
+fn logs(dirs: &AppDirs) -> Result<()> {
+    println!("{}", dirs.logs.display());
+    let mut files: Vec<_> = std::fs::read_dir(&dirs.logs)
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().is_some_and(|x| x == "log"))
+                .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+                .collect()
+        })
+        .unwrap_or_default();
+    if files.is_empty() {
+        println!("{}", s::NO_LOGS);
+        return Ok(());
+    }
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
+    for (_, path) in files.iter().take(6) {
+        if let Some(name) = path.file_name() {
+            println!("  {}", name.to_string_lossy());
+        }
+    }
+    println!("{}", s::LOGS_HINT);
+    Ok(())
+}
+
 async fn run(cli: Cli) -> Result<()> {
     let dirs = match &cli.home {
         Some(h) => AppDirs::under(h),
@@ -177,6 +204,9 @@ async fn run(cli: Cli) -> Result<()> {
     };
     if let Command::Service { action } = &cli.command {
         return service_cmd(&dirs, action).await;
+    }
+    if let Command::Logs = &cli.command {
+        return logs(&dirs);
     }
     let mut client = connect(&dirs).await?;
     match cli.command {
@@ -251,7 +281,7 @@ async fn run(cli: Cli) -> Result<()> {
             other => Err(unexpected(other)),
         },
         Command::Config { action } => config(&mut client, action).await,
-        Command::Service { .. } => unreachable_service(),
+        Command::Service { .. } | Command::Logs => unreachable_service(),
     }
 }
 

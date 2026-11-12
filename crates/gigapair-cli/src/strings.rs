@@ -112,3 +112,6 @@ pub fn service_status(installed: bool, location: Option<&str>, running: bool) ->
         if running { "yes" } else { "no" }
     )
 }
+
+pub const NO_LOGS: &str = "No log files yet.";
+pub const LOGS_HINT: &str = "Newest first. Attach these files when reporting a problem; they contain no keys or pairing codes.";

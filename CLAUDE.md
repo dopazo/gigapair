@@ -92,7 +92,7 @@ Run `cargo fmt` and `cargo clippy` before considering a change done.
 
 - **Language.** Code, comments, UI strings, CLI output, errors, README and docs are in **English**. Keep user-facing strings centralized so they can be translated later. The spec is in Spanish; translate its UI text, don't copy it.
 - **Errors:** `thiserror` for library errors in `gigapair-core`, `anyhow` at binary edges. Error messages tell the user what to do next.
-- **Logging:** `tracing`. No secrets, no full file contents.
+- **Logging:** `tracing`. No secrets, no full file contents. Both `gigapaird` and `gigapair-app` log to daily files via `gigapair_core::logging::init`; log state changes and errors that a bug report would need, not every progress tick.
 - No `unwrap()`/`expect()` in non-test code paths that can fail at runtime.
 - License: MIT (see `LICENSE`). New dependencies must be MIT-compatible (e.g. MIT, Apache-2.0, BSD); avoid copyleft (GPL, AGPL).
 
@@ -103,7 +103,7 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 
 ## Code map
 
-- `gigapair-core`: `paths` (sanitizing, collisions, no-clobber rename, free space), `manifest` (scan + BLAKE3 hashing, 4 MiB blocks), `pairing` (codes, fingerprint), `wire` (peer protocol), `api` + `ipc` (client↔service), `db` (SQLite), `config`, `keys`, `dirs` (`GIGAPAIR_HOME`), `service` (user-level autostart), `engine/` (`net`, `pair`, `send`, `recv`, `api`).
+- `gigapair-core`: `paths` (sanitizing, collisions, no-clobber rename, free space), `manifest` (scan + BLAKE3 hashing, 4 MiB blocks), `pairing` (codes, fingerprint), `wire` (peer protocol), `api` + `ipc` (client↔service), `db` (SQLite), `config`, `keys`, `dirs` (`GIGAPAIR_HOME`), `logging` (daily log files + panic hook, shared by the service and the app; level via `GIGAPAIR_LOG`), `service` (user-level autostart), `engine/` (`net`, `pair`, `send`, `recv`, `api`).
 - `gigapaird`: IPC server, keep-awake thread (`awake.rs`), notifications (`notify.rs`), instance lock.
 - `gigapair-cli`: `lib.rs` (commands), `output.rs`, `strings.rs` (all user text).
 - `gigapair-app`: `shell.rs` (owns the service connection, tray and window lifecycle; quit mode is explicit), `backend.rs` (IPC on a Tokio thread), `app.rs` (the window), `tray/` (per-OS tray + `summarize`), `single.rs` (one app per user: a second launch shows the window), `icon.rs` (placeholder icon), `qr.rs`, `strings.rs`.

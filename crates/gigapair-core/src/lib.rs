@@ -7,6 +7,7 @@ pub mod dirs;
 pub mod engine;
 pub mod ipc;
 pub mod keys;
+pub mod logging;
 pub mod manifest;
 pub mod pairing;
 pub mod paths;
