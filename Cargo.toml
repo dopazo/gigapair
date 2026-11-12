@@ -5,7 +5,9 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90"
+# gpui-pre 0.3.12 uses std::hint::cold_path, stable since 1.95 (it doesn't
+# declare its own rust-version, so cargo can't catch this).
+rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/dopazo/gigapair"
 
