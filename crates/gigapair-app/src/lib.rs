@@ -7,9 +7,6 @@
 //! `--verbose` also logs to the terminal (always on in debug builds). The
 //! log file is `gigapair-app.YYYY-MM-DD.log` in the logs folder.
 
-// No console window in release builds on Windows.
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-
 mod app;
 mod backend;
 mod icon;
@@ -22,7 +19,9 @@ mod tray;
 use gigapair_core::dirs::AppDirs;
 use gpui_kit::App;
 
-fn main() {
+/// Entry point of the `gigapair-app` executable (a thin wrapper in the
+/// `gigapair` package, so every binary ships in one installer).
+pub fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let background = args.iter().any(|a| a == "--background");
     let verbose = cfg!(debug_assertions) || args.iter().any(|a| a == "--verbose");

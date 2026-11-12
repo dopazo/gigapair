@@ -8,10 +8,6 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
-[[bin]]
-name = "gigapair-app"
-path = "src/main.rs"
-
 [dependencies]
 gigapair-core = { path = "../gigapair-core" }
 # Pre-1.0: pinned exactly; upgrade deliberately.

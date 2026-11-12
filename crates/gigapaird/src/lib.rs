@@ -1,9 +1,10 @@
 //! `gigapaird`: the background service. Owns the iroh node, the transfer
 //! queue and the persisted state, and serves the app and the CLI over
 //! local IPC. Closing a client never stops a transfer.
-
-// No console window for the service in release builds on Windows.
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+//!
+//! The executable is a thin wrapper in the `gigapair` package
+//! (`crates/gigapair/src/bin/gigapaird.rs`), so every binary ships in one
+//! installer.
 
 mod awake;
 mod notify;
@@ -32,7 +33,8 @@ struct Args {
     verbose: bool,
 }
 
-fn main() -> Result<()> {
+/// Entry point of the `gigapaird` executable.
+pub fn main() -> Result<()> {
     let args = Args::parse();
     let dirs = match &args.home {
         Some(h) => AppDirs::under(h),

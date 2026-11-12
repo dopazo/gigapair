@@ -73,20 +73,26 @@ Gigapair is built on [iroh](https://github.com/n0-computer/iroh) for connectivit
 
 ## Installation
 
-> Not available yet. Planned channels:
+Download from the [latest release](https://github.com/dopazo/gigapair/releases/latest). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`), installed side by side.
 
-| Platform | Options |
+| Platform | How |
 | --- | --- |
-| Windows | MSI installer, winget, Scoop |
-| macOS | DMG, Homebrew tap |
-| Linux | `.deb`, AppImage |
-| Any | `cargo install gigapair` |
+| Windows | `gigapair-x86_64-pc-windows-msvc.msi`: installs to Program Files, adds a **Gigapair** entry to the Start menu and puts the CLI on the `PATH`. Or, in PowerShell: `powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/releases/latest/download/gigapair-installer.ps1 \| iex"` |
+| macOS (Apple silicon and Intel) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/latest/download/gigapair-installer.sh \| sh`, then run `gigapair-app` |
+| Linux (x86_64, glibc 2.35+) | Same shell installer, then run `gigapair-app` |
+| Any | The `.zip`/`.tar.xz` archives: unpack and keep the four programs in the same folder |
 
-Every release includes SHA-256 checksums and [GitHub build attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). To verify a download:
+The shell and PowerShell installers put the programs in `~/.cargo/bin` (Windows: `%USERPROFILE%\.cargo\bin`) and add it to the `PATH`. They never update themselves: Gigapair contacts nothing but your contacts and the relay.
+
+Not available yet: a macOS `.app` bundle (DMG), AppImage, `.deb`, winget, Scoop, Homebrew and `cargo install`. They are planned for later releases.
+
+Every release includes SHA-256 checksums (`sha256.sum` and one `.sha256` per file) and [GitHub build attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). To verify a download:
 
 ```sh
 gh attestation verify <downloaded-file> --repo dopazo/gigapair
 ```
+
+On Linux the desktop app needs the usual desktop libraries (Vulkan driver, `libxkbcommon`, `fontconfig`), present on any desktop install.
 
 ### Unsigned binaries
 
@@ -96,7 +102,7 @@ v1 binaries are not code-signed, so your operating system will warn you the firs
 - **macOS (Gatekeeper):** open **System Settings → Privacy & Security** and click **Open Anyway**.
 - **Linux:** no signing warning.
 
-If you'd rather avoid the warning, install with `cargo install`, Homebrew or Scoop.
+The shell and PowerShell installers download with `curl`/`irm`, which don't mark files as downloaded from the internet, so they usually avoid these warnings.
 
 ## Usage
 
@@ -195,7 +201,7 @@ Setting the `GIGAPAIR_HOME` environment variable (or passing `--home <dir>` to `
 | 1. Core + CLI ✅ (implemented; real-network acceptance test pending) | `gigapair-core`, `gigapaird` and CLI with pair, send, accept, status and resume | 50 GB between Windows and macOS on different networks, with two forced interruptions, identical hash |
 | 2. Minimal UI ✅ (implemented) | GPUI window with contacts, drag and drop and progress | A full transfer without touching the terminal |
 | 3. Robustness ✅ (implemented; reboot test pending) | Keep-awake, persistence, queue, history, notifications, tray | Reboot mid-transfer and resume automatically |
-| 4. Distribution | Releases (MSI, DMG, AppImage, `.deb`), checksums, attestations, service install | Clean install on all three OSes and a headless server receiving |
+| 4. Distribution 🟡 (release workflow in place: MSI, shell/PowerShell installers, archives, checksums, attestations; DMG/AppImage/`.deb` and system-wide service later) | Releases (MSI, DMG, AppImage, `.deb`), checksums, attestations, service install | Clean install on all three OSes and a headless server receiving |
 
 ## Building from source
 
@@ -214,8 +220,9 @@ cargo build --release
 This produces `gigapair-app`, `gigapair` (and `gpair`) and `gigapaird` in `target/release/`. Keep them together: the app and the CLI start `gigapaird` from the same folder when it isn't running.
 
 ```sh
-cargo run --release -p gigapair-app        # desktop app
-cargo run --release -p gigapair-cli -- status
+cargo run --release -p gigapair              # desktop app
+cargo run --release --bin gigapair -- status # CLI
+cargo run --release --bin gigapaird          # service in the foreground
 ```
 
 ### Trying it on one computer
@@ -245,6 +252,7 @@ The workspace contains:
 | Crate | Purpose |
 | --- | --- |
 | `crates/gigapair-core` | Transfer logic and protocol, no UI dependencies |
+| `crates/gigapair` | The executables (`gigapair-app`, `gigapair`, `gpair`, `gigapaird`) as thin wrappers, so a release ships them together |
 | `crates/gigapaird` | Background service, including system service installation |
 | `crates/gigapair-cli` | CLI client |
 | `crates/gigapair-app` | GPUI desktop client; starts the service if it isn't running |
