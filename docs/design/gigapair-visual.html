@@ -316,7 +316,7 @@ body {
 /* watches: ruled rows, columns aligned like a table */
 .list { display: grid; }
 .trow {
-  display: grid; grid-template-columns: minmax(0, 1fr) 150px 112px 74px 132px; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: minmax(0, 1fr) 150px 34px 112px 74px 132px; gap: 14px; align-items: center;
   padding: 8px 2px; border-top: 1px solid var(--line);
 }
 .list .trow:last-child { border-bottom: 1px solid var(--line); }
@@ -326,6 +326,7 @@ body {
 .trow .what .sub { display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
 .trow .strip { height: 7px; }
 .trow .amt { text-align: right; }
+.trow .pct { font-size: 12px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
 .trow .rate { color: var(--ink-2); font-size: 12px; display: grid; justify-items: end; line-height: 1.3; }
 .trow .rate b { color: var(--ink); font-weight: 600; }
 .trow .acts { display: flex; gap: 2px; justify-content: flex-end; }
@@ -596,6 +597,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
             <div class="trow" id="tcard">
               <span class="what"><span class="fname">Season 2 raw footage</span><span class="sub"><span id="tstatus">2 files</span><span class="tag" id="conntag"></span></span></span>
               <span class="strip" id="strip" role="img" aria-label="Transfer progress in blocks"></span>
+              <span class="pct num" id="pct">34%</span>
               <span class="amt big num" id="amount">1.1 <small>of 3.2 GB</small></span>
               <span class="rate num"><b id="speed">96.4 MB/s</b><span id="eta"><b>22 s</b> left</span></span>
               <span class="acts"><button class="btn" type="button">Pause</button><button class="btn quiet" type="button">Cancel</button></span>
@@ -603,6 +605,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
             </div>
             <div class="trow dim">
               <span class="what"><span class="fname">Grading LUTs</span><span class="sub">waiting for Studio Mac to accept</span></span>
+              <span></span>
               <span></span>
               <span class="amt big num">2.4 <small>GB</small></span>
               <span class="rate"></span>
@@ -615,6 +618,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
             <div class="trow">
               <span class="what"><span class="fname">B-cam interviews.mov</span><span class="sub">paused by you, into Downloads <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
               <span class="strip paused" data-p="0.72" role="img" aria-label="72 percent verified"></span>
+              <span class="pct num">72%</span>
               <span class="amt big num">41.7 <small>of 58.0 GB</small></span>
               <span class="rate">Paused</span>
               <span class="acts"><button class="btn" type="button">Resume</button><button class="btn quiet" type="button">Cancel</button></span>
@@ -724,6 +728,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
   const strip = document.getElementById('strip');
   const range = document.getElementById('progress');
   const amount = document.getElementById('amount');
+  const pct = document.getElementById('pct');
   const eta = document.getElementById('eta');
   const speed = document.getElementById('speed');
   const note = document.getElementById('note');
@@ -762,6 +767,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
     });
     const done = (TOTAL_GB * p).toFixed(1);
     amount.innerHTML = `${done} <small>of ${TOTAL_GB} GB</small>`;
+    pct.textContent = `${Math.floor(p * 100)}%`;
     const relaySpeed = conn === 'relay' ? 11.8 : SPEED_MBPS;
     if (cut) {
       speed.textContent = '0 MB/s';
