@@ -12,3 +12,8 @@ repository = "https://github.com/dopazo/gigapair"
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

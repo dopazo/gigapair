@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Gigapair is a peer-to-peer app for moving very large files (50–200+ GB) between paired devices: end-to-end encrypted, BLAKE3-verified and resumable. Rust workspace, GPUI desktop UI, CLI, and a background service.
 
 - Full product spec: `spec_gigapair.md` (in Spanish). It is the source of truth for scope, requirements (RF-xx / RNF-xx) and stage plan. Cite requirement IDs in commits and PRs when relevant.
-- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution) is out of scope until asked.
+- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution): minimal release pipeline with dist (see `docs/releasing.md`); DMG/AppImage/`.deb`, other channels, the system-wide service and the update notice come later.
 
 ## Architecture
 
@@ -23,6 +23,7 @@ gigapair-cli (clap) ─┘
 | `crates/gigapaird` | Tokio service; owns the iroh node, queue, state, retries, events to clients; installs itself as a system service | The only process that touches the network and the DB |
 | `crates/gigapair-cli` | `gigapair` binary (alias `gpair`) | Thin client: IPC only, no business logic |
 | `crates/gigapair-app` | GPUI client; starts the service if not running | Thin client: IPC only, no business logic |
+| `crates/gigapair` | The executables (`gigapair-app`, `gigapair`, `gpair`, `gigapaird`), each a few lines calling its crate's `main()` | The only package dist releases; keep logic in the library crates |
 
 Invariants:
 
@@ -63,7 +64,7 @@ Pin versions for anything pre-1.0 (GPUI, gpui-component, iroh, iroh-blobs) and u
 | Keys | keyring |
 | Sleep inhibit | keepawake |
 | Notifications / tray | notify-rust; tray: tray-icon (Windows, macOS), ksni (Linux, StatusNotifierItem over D-Bus, no GTK) |
-| Release | dist (cargo-dist), release-plz |
+| Release | dist (cargo-dist) `0.34.0`: `dist-workspace.toml`, `.github/workflows/release.yml` (generated: edit the toml and run `dist generate`) |
 
 Paths come from `directories` (qualifier `dev`, org `gigapair`, app `Gigapair`). Never store anything next to the executable.
 
@@ -74,9 +75,10 @@ cargo build                      # build the workspace
 cargo test --workspace           # all tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
-cargo run -p gigapaird           # run the service in the foreground
-cargo run -p gigapair-cli -- <args>
-cargo run -p gigapair-app
+cargo run --bin gigapaird        # run the service in the foreground
+cargo run --bin gigapair -- <args>
+cargo run -p gigapair            # the desktop app (default-run)
+dist plan                        # dry run of the release (cargo install cargo-dist --version 0.34.0 --locked)
 ```
 
 Run `cargo fmt` and `cargo clippy` before considering a change done.
@@ -107,13 +109,14 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 - `gigapaird`: IPC server, keep-awake thread (`awake.rs`), notifications (`notify.rs`), instance lock.
 - `gigapair-cli`: `lib.rs` (commands), `output.rs`, `strings.rs` (all user text).
 - `gigapair-app`: `shell.rs` (owns the service connection, tray and window lifecycle; quit mode is explicit), `backend.rs` (IPC on a Tokio thread), `app.rs` (the window), `tray/` (per-OS tray + `summarize`), `single.rs` (one app per user: a second launch shows the window), `icon.rs` (placeholder icon), `qr.rs`, `strings.rs`.
+- `gigapair`: `src/bin/*.rs` (one wrapper per executable; `windows_subsystem` lives here), `wix/main.wxs` (MSI, hand-edited Start menu shortcut).
 - Tests: `crates/gigapair-core/tests/transfer.rs` runs two engines over loopback (`NetworkMode::LocalOnly`), including restarts mid-transfer. `throughput` is `#[ignore]`d; size via `GIGAPAIR_TEST_MB`.
 
 ## Known gaps / next steps
 
 1. Manual acceptance test of stage 1 across two real networks (one behind CGNAT) with relays; check `direct`/`relay` labelling and the first-relay notice.
 2. Tray (RF-14): implemented in `gigapair-app` (`shell.rs`, `tray/`, `single.rs`). Verified on Linux only; the Windows code is cross-checked (`cargo check --target x86_64-pc-windows-gnu`) but not run, macOS is compiled in CI but untested. The icon is a placeholder drawn in `icon.rs` until a real app icon exists (also needed for the window and installers). Pending: Windows/macOS manual test, the stage 3 reboot test, real icon.
-3. System-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`) and "new release available" notice.
+3. Distribution follow-ups: DMG/`.app` bundle, AppImage, `.deb`, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); "new release available" notice (must respect no-telemetry: opt-in or clearly explained). The release pipeline has never run: the first tag is its test.
 4. Relay: the first-use notice is emitted once per install; the app shows it as a banner, the CLI prints it during `send`.
 5. No LAN discovery (iroh 1.4 has no mDNS); contacts rely on n0 DNS (relay URL only) plus stored addresses and a stable UDP port.
 6. Ticket sends to non-contacts (RF-16) not implemented.
