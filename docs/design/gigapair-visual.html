@@ -246,6 +246,29 @@ body {
 .drop.over .cell:nth-child(6) { animation-delay: .75s; }
 @keyframes fillcell { 0%, 100% { fill: transparent; } 25%, 70% { fill: var(--signal); stroke: var(--signal); } }
 
+/* pages */
+.page-view { display: flex; flex-direction: column; gap: 10px; }
+.page-view[hidden] { display: none; }
+.day-label { margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--ink); }
+.hrow {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) 96px 220px 40px 96px; gap: 14px; align-items: center;
+  padding: 8px 2px; border-top: 1px solid var(--line);
+}
+.list .hrow:last-child { border-bottom: 1px solid var(--line); }
+.hrow .dir { color: var(--ink); }
+.hrow .dir svg { width: 16px; height: 16px; display: block; }
+.hrow .what .fname { display: block; }
+.hrow .what .sub { display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+.hrow .amt { text-align: right; }
+.hrow .res { font-size: 12px; color: var(--ink); line-height: 1.35; }
+.hrow .res span { color: var(--ink-3); }
+.hrow .res.bad { color: var(--danger); }
+.hrow .res.bad span { color: var(--ink-2); }
+.hrow .res.muted { color: var(--ink-3); }
+.hrow .when { color: var(--ink-3); font-size: 12px; text-align: right; }
+.hrow .acts { display: flex; justify-content: flex-end; }
+.side .nav, .side .contact { cursor: pointer; }
+.side .nav.on { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
 /* lists */
 .section-title { margin: 6px 0 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
 .card { border-radius: 8px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); padding: 9px 12px; display: grid; gap: 7px; }
@@ -470,9 +493,13 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
   <!-- ============================================================ -->
   <section class="chapter" id="window">
     <h2>The window</h2>
-    <p class="lede">The same screen as the current app, with every control it has today, redrawn. Shown at the real window size (1040 × 700). Move the progress, cut the connection, switch to relay, or drag any file over the drop zone.</p>
+    <p class="lede">The same screen as the current app, with every control it has today, redrawn. Shown at the real window size (1040 × 700), with the contact page and History. Move the progress, cut the connection, switch to relay, or drag any file over the drop zone.</p>
 
     <div class="controls">
+      <div class="seg" role="group" aria-label="Page">
+        <button type="button" data-page="contact" aria-pressed="true">Contact</button>
+        <button type="button" data-page="history" aria-pressed="false">History</button>
+      </div>
       <div class="seg" role="group" aria-label="Theme">
         <button type="button" data-theme-set="light">Light</button>
         <button type="button" data-theme-set="dark">Dark</button>
@@ -525,6 +552,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
         </aside>
 
         <main class="main">
+          <div class="page-view" id="page-contact">
           <div class="head">
             <div class="grow">
               <h3>Send to Studio Mac</h3>
@@ -590,6 +618,73 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
               <span class="amt big num">41.7 <small>of 58.0 GB</small></span>
               <span class="rate">Paused</span>
               <span class="acts"><button class="btn" type="button">Resume</button><button class="btn quiet" type="button">Cancel</button></span>
+            </div>
+          </div>
+          </div>
+          <div class="page-view" id="page-history" hidden>
+            <div class="head">
+              <div class="grow"><h3>History</h3><div class="meta">Finished transfers with every contact, newest first</div></div>
+              <button class="btn quiet" type="button">Clear history</button>
+            </div>
+
+            <h5 class="day-label">Today</h5>
+            <div class="list">
+              <div class="hrow">
+                <span class="dir" title="Sent"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 8.5 V1.5 M4.5 5 L8 1.5 L11.5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Color grade v3 export.mov</span><span class="sub">to Studio Mac, 1 file <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+                <span class="amt big num">14.8 <small>GB</small></span>
+                <span class="res num">Completed in 2 min 41 s<br><span>91.9 MB/s average</span></span>
+                <span class="when num">13:05</span>
+                <span class="acts"></span>
+              </div>
+              <div class="hrow">
+                <span class="dir" title="Received"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 1 V8 M4.5 4.5 L8 8 L11.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Interview transcripts</span><span class="sub">from Editing PC, 12 files <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+                <span class="amt big num">38.2 <small>MB</small></span>
+                <span class="res num">Completed in 3 s<br><span>12.7 MB/s average</span></span>
+                <span class="when num">11:48</span>
+                <span class="acts"><button class="btn" type="button">Open folder</button></span>
+              </div>
+              <div class="hrow">
+                <span class="dir" title="Sent"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 8.5 V1.5 M4.5 5 L8 1.5 L11.5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Drone B-roll</span><span class="sub">to Home server, 4 files <span class="tag" title="Via relay use1-1.relay.n0.iroh.link"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M7 5h12" stroke="currentColor" stroke-width="2" stroke-dasharray="2.5 2.5"/></svg>Via relay use1-1</span></span></span>
+                <span class="amt big num">212.6 <small>GB</small></span>
+                <span class="res bad">Failed at 61%<br><span>Home server ran out of disk space. Free some space there, then retry.</span></span>
+                <span class="when num">09:20</span>
+                <span class="acts"><button class="btn" type="button">Retry</button></span>
+              </div>
+            </div>
+
+            <h5 class="day-label">Yesterday</h5>
+            <div class="list">
+              <div class="hrow">
+                <span class="dir" title="Received"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 1 V8 M4.5 4.5 L8 8 L11.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Archive 2019.tar</span><span class="sub">from Home server, 1 file <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+                <span class="amt big num">186.0 <small>GB</small></span>
+                <span class="res num">Completed in 41 min<br><span>75.6 MB/s average</span></span>
+                <span class="when num">22:14</span>
+                <span class="acts"><button class="btn" type="button">Open folder</button></span>
+              </div>
+              <div class="hrow">
+                <span class="dir" title="Sent"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 8.5 V1.5 M4.5 5 L8 1.5 L11.5 5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Old renders</span><span class="sub">to Studio Mac, 9 files</span></span>
+                <span class="amt big num">7.2 <small>GB</small></span>
+                <span class="res muted">Rejected by Studio Mac</span>
+                <span class="when num">18:02</span>
+                <span class="acts"><button class="btn" type="button">Retry</button></span>
+              </div>
+            </div>
+
+            <h5 class="day-label">10 November</h5>
+            <div class="list">
+              <div class="hrow">
+                <span class="dir" title="Received"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="10.5" width="8" height="5" rx="1" fill="var(--signal)"/><path d="M8 1 V8 M4.5 4.5 L8 8 L11.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                <span class="what"><span class="fname">Sound library</span><span class="sub">from Editing PC, 1,204 files <span class="tag"><svg viewBox="0 0 26 10" aria-hidden="true"><circle cx="3" cy="5" r="3" fill="currentColor"/><circle cx="23" cy="5" r="3" fill="currentColor"/><path d="M6 5h14" stroke="currentColor" stroke-width="2"/></svg>Direct</span></span></span>
+                <span class="amt big num">54.9 <small>GB</small></span>
+                <span class="res muted">Cancelled by you at 23%</span>
+                <span class="when num">16:40</span>
+                <span class="acts"></span>
+              </div>
             </div>
           </div>
         </main>
@@ -676,7 +771,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       const secs = Math.round((TOTAL_GB * (1 - p) * 1000) / relaySpeed);
       eta.innerHTML = p >= 1 ? '<b>Verifying</b>' : `<b>${secs >= 60 ? Math.floor(secs/60) + ' min ' + (secs%60) + ' s' : secs + ' s'}</b> left`;
     }
-    conntag.innerHTML = linkSvg(conn) + (conn === 'direct' ? 'Direct' : 'Via relay (use1-1.relay.n0.iroh.link)');
+    conntag.innerHTML = linkSvg(conn) + (conn === 'direct' ? 'Direct' : 'Via relay use1-1');
     tstatus.textContent = cut ? 'waiting for Studio Mac to reconnect' : '2 files';
     if (cut) {
       note.hidden = false; note.className = 'note warn';
@@ -712,7 +807,19 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
   }), { rootMargin: '-40% 0px -55% 0px' });
   document.querySelectorAll('section.chapter').forEach(s => io.observe(s));
 
-  // Rename opens an inline field; remove asks for a second click, as today.
+  // Page switch: the sidebar and the control bar both drive it.
+  const pages = { contact: document.getElementById('page-contact'), history: document.getElementById('page-history') };
+  const navHistory = [...document.querySelectorAll('.side .nav')].find(n => n.textContent.trim() === 'History');
+  const contactOn = document.querySelector('.side .contact.on');
+  const showPage = p => {
+    Object.entries(pages).forEach(([k, el]) => el.hidden = k !== p);
+    navHistory.classList.toggle('on', p === 'history');
+    contactOn.classList.toggle('on', p === 'contact');
+    document.querySelectorAll('[data-page]').forEach(b => b.setAttribute('aria-pressed', b.dataset.page === p));
+  };
+  document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => showPage(b.dataset.page));
+  navHistory.onclick = () => showPage('history');
+  contactOn.onclick = () => showPage('contact');  // Rename opens an inline field; remove asks for a second click, as today.
   const renameBox = document.getElementById('rename');
   document.getElementById('rename-btn').onclick = () => {
     renameBox.innerHTML = '<input value="Studio Mac" aria-label="Contact name"><button class="btn" type="button">Save</button>';
