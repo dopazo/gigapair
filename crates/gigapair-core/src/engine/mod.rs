@@ -387,10 +387,20 @@ impl Inner {
         }
     }
 
-    /// Persists a status change and notifies clients.
+    /// Persists a status change and notifies clients. Does nothing to a
+    /// transfer that already ended (see [`Db::set_status`]).
     pub fn set_status(&self, id: &str, status: TransferStatus) {
-        if let Err(e) = self.db.set_status(id, status) {
-            tracing::error!("could not save status of {id}: {e}");
+        match self.db.set_status(id, status) {
+            Ok(true) => {}
+            Ok(false) => {
+                tracing::debug!(
+                    transfer = id,
+                    ?status,
+                    "transfer already ended; status kept"
+                );
+                return;
+            }
+            Err(e) => tracing::error!("could not save status of {id}: {e}"),
         }
         if status.is_terminal() || status != TransferStatus::Transferring {
             let mut live = self.live();
@@ -403,6 +413,15 @@ impl Inner {
     }
 
     pub fn fail(&self, id: &str, message: &str) {
+        if self
+            .db
+            .transfer(id)
+            .ok()
+            .flatten()
+            .is_some_and(|r| r.status.is_terminal())
+        {
+            return;
+        }
         tracing::warn!(transfer = id, "transfer failed: {message}");
         let _ = self.db.set_error(id, Some(message));
         self.set_note(id, None);

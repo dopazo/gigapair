@@ -376,7 +376,8 @@ impl Inner {
             }
             (Direction::Receive, TransferStatus::Failed) => {
                 let _ = self.db.set_error(id, None);
-                self.set_status(id, TransferStatus::Queued);
+                self.db.reopen(id, TransferStatus::Queued)?;
+                self.emit_transfer(id);
                 recv::start_download(self, id);
                 Ok(Response::Transfer(self.info_or_err(id)?))
             }

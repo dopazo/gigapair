@@ -71,8 +71,10 @@ fn rounded_square(u: f32, v: f32, margin: f32, radius: f32) -> bool {
 /// RGBA to ARGB (the D-Bus StatusNotifierItem format).
 #[cfg(any(target_os = "linux", test))]
 pub fn to_argb(rgba: &[u8]) -> Vec<u8> {
-    rgba.chunks_exact(4)
-        .flat_map(|p| [p[3], p[0], p[1], p[2]])
+    let (pixels, _) = rgba.as_chunks::<4>();
+    pixels
+        .iter()
+        .flat_map(|&[r, g, b, a]| [a, r, g, b])
         .collect()
 }
 
