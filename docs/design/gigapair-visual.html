@@ -328,14 +328,16 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
 </head>
 <body>
 
-<!-- One drawing of the mark, reused everywhere. 64-unit grid:
-     a capsule split in two (the paired devices, flat sides facing) and one square
-     block (a 4 MiB block in transit) between them. -->
+<!-- One drawing of the mark, reused everywhere. 64-unit grid: a rounded-
+     square G (stroke 11 around a 36 x 36 square with radius 10 corners,
+     outlined so it can be filled), whose bar at mid height ends in a
+     yellow block, a 4 MiB block of data. #end-l is the letter, #blk the
+     block; #end-r is kept empty so older uses still resolve. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <path id="end-l" d="M22 14 A12 18 0 0 0 22 50 Z"/>
-    <path id="end-r" d="M42 14 A12 18 0 0 1 42 50 Z"/>
-    <rect id="blk" x="26" y="26" width="12" height="12" rx="1.5"/>
+    <path id="end-l" d="M44 8.5 H24 A15.5 15.5 0 0 0 8.5 24 V40 A15.5 15.5 0 0 0 24 55.5 H40 A15.5 15.5 0 0 0 55.5 40 V26.5 H44.5 V40 A4.5 4.5 0 0 1 40 44.5 H24 A4.5 4.5 0 0 1 19.5 40 V24 A4.5 4.5 0 0 1 24 19.5 H44 Z"/>
+    <path id="end-r" d=""/>
+    <rect id="blk" x="31" y="26.5" width="13.5" height="11"/>
   </defs>
 </svg>
 
@@ -355,13 +357,13 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       <use href="#blk" class="block" fill="#FFC929"/>
     </svg>
     <h1>gigapair</h1>
-    <p>Two of your devices and the one thing moving between them. The identity is built from exactly that: a pair of ends, and a block in transit.</p>
+    <p>A G whose bar is a block of data. Gigapair moves files as blocks, and the one in the mark is the one that matters: yellow, arriving.</p>
   </header>
 
   <!-- ============================================================ -->
   <section class="chapter" id="mark">
     <h2>The mark</h2>
-    <p class="lede">Gigapair moves files as 4 MiB blocks, and each block is checked with BLAKE3 before it counts. The mark draws that literally, so the logo and the progress you watch in the app are the same shape.</p>
+    <p class="lede">The initial, drawn with the app's own shapes. Gigapair moves files as 4 MiB blocks, each checked with BLAKE3 before it counts; the bar of the G ends in one of those blocks, and the progress strip in the app is made of the same squares.</p>
 
     <div class="panel construct">
       <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -372,21 +374,21 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
         <use href="#end-r" fill="#17181C"/>
         <use href="#blk" fill="#FFC929"/>
         <g stroke="#E5484D" stroke-width=".4" fill="none" stroke-dasharray="1 1">
-          <ellipse cx="22" cy="32" rx="12" ry="18"/><ellipse cx="42" cy="32" rx="12" ry="18"/>
+          <path d="M44 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V32 M31 32 H55.5"/>
         </g>
       </svg>
       <ul class="parts">
         <li>
           <svg viewBox="0 0 64 64"><use href="#end-l" fill="#17181C"/></svg>
-          <div><b>The ends</b>Two half-ovals, flat sides facing each other: one capsule split into the two devices of a pair. Taller than wide, so the pair reads as two upright devices rather than two wheels. They are the same shape mirrored, because a pair has no master and no server.</div>
+          <div><b>The letter</b>A G on a rounded square, one stroke of even weight. The top arm stops before the corner, so the mouth stays open and the letter reads as G, not as a square ring, from 16 px to a poster.</div>
         </li>
         <li>
-          <svg viewBox="0 0 64 64"><use href="#blk" fill="#FFC929" transform="translate(-12 -12) scale(1.4)"/></svg>
-          <div><b>The block</b>A square in signal yellow: data in transit. It is the only coloured thing in the mark, as it is in the app, where yellow always means data or the action that moves it.</div>
+          <svg viewBox="0 0 64 64"><use href="#blk" fill="#FFC929" transform="translate(-43.5 -32) scale(2)"/></svg>
+          <div><b>The block</b>The bar runs in from the right at mid height and ends in a yellow block, joined to the black along one straight edge. Yellow is the only colour in the mark, as in the app, where it always means data or the action that moves it.</div>
         </li>
         <li>
-          <svg viewBox="0 0 64 64"><path d="M8 32H56" stroke="#8A8F99" stroke-width="3" stroke-dasharray="4 4"/></svg>
-          <div><b>The gap</b>Space on both sides of the block, never a line. The connection is implied; the app draws it only when it has something to say (direct or relay).</div>
+          <svg viewBox="0 0 64 64"><path d="M44 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V32 M31 32 H55.5" fill="none" stroke="#E5484D" stroke-width="2" stroke-dasharray="3 3"/></svg>
+          <div><b>The construction</b>One centreline (dashed): a 36-unit square with radius-10 corners and a bar at its centre, stroked at 11. Everything is on the 64-unit grid, so it renders crisp at 16, 32 and 64 px.</div>
         </li>
       </ul>
     </div>
@@ -408,10 +410,10 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
       </div>
       <div class="panel dark">
         <h3>Tray: idle and busy</h3>
-        <p>No tile in the tray, just the mark. Idle, the block is hollow: nothing is moving. Busy, it fills with yellow. One glance, no badge.</p>
+        <p>No tile in the tray, just the G. Idle, the block is hollow: nothing is moving. Busy, it fills with yellow. One glance, no badge.</p>
         <div class="tray-row">
           <div class="taskbar dark">
-            <svg viewBox="0 0 64 64" width="18" height="18"><use href="#end-l" fill="#F1F2F4"/><use href="#end-r" fill="#F1F2F4"/><rect x="27.5" y="27.5" width="9" height="9" rx="1" fill="none" stroke="#F1F2F4" stroke-width="3"/></svg>
+            <svg viewBox="0 0 64 64" width="18" height="18"><use href="#end-l" fill="#F1F2F4"/><use href="#end-r" fill="#F1F2F4"/><rect x="32.5" y="28" width="11" height="8" fill="none" stroke="#F1F2F4" stroke-width="3"/></svg>
             <span>idle</span>
           </div>
           <div class="taskbar dark">
@@ -419,7 +421,7 @@ table.changes td:nth-child(2) { width: 38%; color: #565A64; }
             <span>sending</span>
           </div>
           <div class="taskbar light">
-            <svg viewBox="0 0 64 64" width="18" height="18"><use href="#end-l" fill="#17181C"/><use href="#end-r" fill="#17181C"/><rect x="27.5" y="27.5" width="9" height="9" rx="1" fill="none" stroke="#17181C" stroke-width="3"/></svg>
+            <svg viewBox="0 0 64 64" width="18" height="18"><use href="#end-l" fill="#17181C"/><use href="#end-r" fill="#17181C"/><rect x="32.5" y="28" width="11" height="8" fill="none" stroke="#17181C" stroke-width="3"/></svg>
             <span>idle</span>
           </div>
           <div class="taskbar light">
