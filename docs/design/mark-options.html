@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gigapair: mark options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+:root { --signal: #FFC929; --ink: #17181C; --paper: #F3F4F6; --graphite: #1C1D21; --slate: #8A8F99; --line: #DCDFE5; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Archivo", "Segoe UI", sans-serif; color: var(--ink); background: var(--paper); line-height: 1.5; }
+.page { max-width: 1180px; margin: 0 auto; padding: 48px 32px 96px; }
+h1 { font-size: 34px; line-height: 1.1; margin: 0 0 10px; font-weight: 800; font-variation-settings: "wdth" 125; }
+.lede { max-width: 64ch; color: #565A64; margin: 0 0 36px; font-size: 16px; }
+.opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.opt { background: #fff; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); padding: 20px; display: grid; gap: 16px; align-content: start; }
+.opt h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.opt p { margin: 0; font-size: 13.5px; color: #565A64; }
+.hero { display: grid; place-items: center; height: 180px; }
+.hero svg { width: 150px; height: 150px; }
+.strip { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
+.tile { display: grid; place-items: center; background: var(--graphite); border-radius: 22%; }
+.lbl { font-size: 11px; color: var(--slate); text-align: center; margin-top: 4px; }
+.bar { display: flex; gap: 12px; align-items: center; padding: 6px 10px; border-radius: 6px; font-size: 11.5px; }
+.bar.dark { background: #202124; color: #A9ADB6; }
+.bar.light { background: #E9EBEF; color: #565A64; }
+.word { display: flex; align-items: center; gap: 10px; font-weight: 800; font-variation-settings: "wdth" 125; font-size: 26px; letter-spacing: -0.02em; }
+.verdict { font-size: 13px; border-top: 1px solid var(--line); padding-top: 12px; color: #565A64; }
+.verdict b { color: var(--ink); }
+@media (max-width: 1000px) { .opts { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<!-- Each option is a <symbol> drawn on a 64-unit grid, with a slot for the
+     block so it can be yellow (busy, brand) or hollow (idle tray). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- A: upright split capsule (current) -->
+    <symbol id="a" viewBox="0 0 64 64">
+      <path d="M22 14 A12 18 0 0 0 22 50 Z" fill="var(--c)"/>
+      <path d="M42 14 A12 18 0 0 1 42 50 Z" fill="var(--c)"/>
+      <rect x="26" y="26" width="12" height="12" rx="1.5" fill="var(--b)" stroke="var(--bs, none)" stroke-width="3"/>
+    </symbol>
+    <!-- B: wide split capsule, like a connector seen from the side -->
+    <symbol id="b" viewBox="0 0 64 64">
+      <path d="M22 19 A17 13 0 0 0 22 45 Z" fill="var(--c)"/>
+      <path d="M42 19 A17 13 0 0 1 42 45 Z" fill="var(--c)"/>
+      <rect x="26" y="26" width="12" height="12" rx="1.5" fill="var(--b)" stroke="var(--bs, none)" stroke-width="3"/>
+    </symbol>
+    <!-- C: a G whose bar is the block -->
+    <symbol id="c" viewBox="0 0 64 64">
+      <path d="M48.6 19.3 A21 21 0 1 0 53 32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="33" y="27" width="20" height="10.5" rx="1.5" fill="var(--b)" stroke="var(--bs, none)" stroke-width="3"/>
+    </symbol>
+    <!-- D: a G built from blocks; the one being sent is yellow -->
+    <symbol id="d" viewBox="0 0 64 64">
+      <g transform="translate(2 2)">
+        <g fill="var(--c)">
+          <rect x="18" y="5" width="11" height="11" rx="1.5"/><rect x="31" y="5" width="11" height="11" rx="1.5"/><rect x="44" y="5" width="11" height="11" rx="1.5"/>
+          <rect x="5" y="18" width="11" height="11" rx="1.5"/>
+          <rect x="5" y="31" width="11" height="11" rx="1.5"/><rect x="44" y="31" width="11" height="11" rx="1.5"/>
+          <rect x="18" y="44" width="11" height="11" rx="1.5"/><rect x="31" y="44" width="11" height="11" rx="1.5"/><rect x="44" y="44" width="11" height="11" rx="1.5"/>
+        </g>
+        <rect x="32" y="32" width="9" height="9" rx="1.5" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+      </g>
+    </symbol>
+    <!-- C refinements. Ring: centre 32,32, radius 20, stroke 11 (outer 25.5,
+         inner 14.5). It opens in the upper right and ends at 3 o'clock with a
+         flat cut on y=32; the bar sits in the opening. -->
+    <!-- C1: bar the same weight as the ring, separated by a thin seam -->
+    <symbol id="c1" viewBox="0 0 64 64">
+      <path d="M38.8 13.2 A20 20 0 1 0 52 32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="33" y="21" width="24.5" height="9" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- C2: the ring turns into a short black spur; the yellow block is its tip -->
+    <symbol id="c2" viewBox="0 0 64 64">
+      <path d="M38.8 13.2 A20 20 0 1 0 52 32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="46.5" y="21" width="11" height="11" fill="var(--c)"/>
+      <rect x="33" y="21" width="11" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- C3: rounded ring, block floating in the mouth -->
+    <symbol id="c3" viewBox="0 0 64 64">
+      <path d="M48.3 21.3 A20 20 0 1 0 50.8 38.8" fill="none" stroke="var(--c)" stroke-width="11" stroke-linecap="round"/>
+      <rect x="31" y="26" width="12" height="12" rx="2" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- C4: square-ended ring, block at the centre of the mouth, same width as the ring -->
+    <symbol id="c4" viewBox="0 0 64 64">
+      <path d="M49.3 22 A20 20 0 1 0 49.3 42" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="34.5" y="26.5" width="11" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G1: round G. The opening is small (upper right only), and the bar
+         sits at mid height, running in from the right edge: black spur,
+         yellow block at its tip. That bar is what makes a C a G. -->
+    <symbol id="g1" viewBox="0 0 64 64">
+      <path d="M44.9 16.7 A20 20 0 1 0 52 32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44" y="26.5" width="13.5" height="11" fill="var(--c)"/>
+      <rect x="30.5" y="26.5" width="11.5" height="11" rx="1" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G2: rounded-square G, same construction. Flat sides and a corner make
+         the letter unmistakable even at 16 px. -->
+    <symbol id="g2" viewBox="0 0 64 64">
+      <path d="M50 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44.5" y="26.5" width="11" height="11" fill="var(--c)"/>
+      <rect x="31" y="26.5" width="11.5" height="11" rx="1" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G3 / G4: the whole bar is yellow, from its tip to the outer right
+         edge, as in the first C. A mask cuts a 2-unit seam into the ring
+         around the bar, so yellow and black never touch. -->
+    <mask id="seam" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <rect x="42" y="24.5" width="22" height="15" fill="#000"/>
+    </mask>
+    <symbol id="g3" viewBox="0 0 64 64">
+      <path d="M44.9 16.7 A20 20 0 1 0 52 32" fill="none" stroke="var(--c)" stroke-width="11" mask="url(#seam)"/>
+      <path d="M52 32 V40" fill="none" stroke="var(--c)" stroke-width="11" mask="url(#seam)"/>
+      <rect x="30.5" y="26.5" width="27" height="11" rx="1" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <symbol id="g4" viewBox="0 0 64 64">
+      <path d="M50 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V32" fill="none" stroke="var(--c)" stroke-width="11" mask="url(#seam)"/>
+      <rect x="31" y="26.5" width="24.5" height="11" rx="1" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G5: G2 with a taller mouth (bar lowered to y 30-41) and the yellow
+         block joined to the black spur along one straight edge. -->
+    <symbol id="g5" viewBox="0 0 64 64">
+      <path d="M50 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V35" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44.5" y="30" width="11" height="11" fill="var(--c)"/>
+      <rect x="31" y="30" width="13.5" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G6: as G5, with the top arm stopping short of the corner so the
+         mouth opens wider, like a geometric G. -->
+    <symbol id="g6" viewBox="0 0 64 64">
+      <path d="M44 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V35" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44.5" y="30" width="11" height="11" fill="var(--c)"/>
+      <rect x="31" y="30" width="13.5" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <!-- G7 / G8: G6 with the bar raised: centred on the letter (y 26.5-37.5)
+         and a little above the centre (y 24-35). -->
+    <symbol id="g7" viewBox="0 0 64 64">
+      <path d="M44 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V32" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44.5" y="26.5" width="11" height="11" fill="var(--c)"/>
+      <rect x="31" y="26.5" width="13.5" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+    <symbol id="g8" viewBox="0 0 64 64">
+      <path d="M44 14 H24 A10 10 0 0 0 14 24 V40 A10 10 0 0 0 24 50 H40 A10 10 0 0 0 50 40 V30" fill="none" stroke="var(--c)" stroke-width="11"/>
+      <rect x="44.5" y="24" width="11" height="11" fill="var(--c)"/>
+      <rect x="31" y="24" width="13.5" height="11" fill="var(--b)" stroke="var(--bs, none)" stroke-width="2.5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <h1>Mark options</h1>
+  <p class="lede"><b>Chosen: G7</b>, at the end of this page. Four directions side by side, each at full size, as an app icon down to 16 px, and in the tray (idle: hollow block, busy: yellow block). The colour rule is the same for all: ink or paper for the shape, yellow only for the block that moves.</p>
+
+  <div class="opts" id="opts"></div>
+  <h1 style="margin-top:64px">Making it a G</h1>
+  <p class="lede">The first refinements read as a C: the opening was too big and the bar sat above the end of the ring. A G needs a small opening and a bar at mid height that runs in from the right. The rounded-square G, refined: a taller mouth and the yellow block joined to the black spur.</p>
+  <div class="opts" id="refine" style="grid-template-columns:repeat(3, 1fr)"></div>
+</div>
+
+<template id="tpl">
+  <section class="opt">
+    <h2></h2>
+    <div class="hero"><svg style="--c:#17181C;--b:#FFC929"><use/></svg></div>
+    <div class="strip">
+      <div><div class="tile" style="width:64px;height:64px"><svg width="50" height="50" style="--c:#F1F2F4;--b:#FFC929"><use/></svg></div><div class="lbl">64</div></div>
+      <div><div class="tile" style="width:32px;height:32px"><svg width="26" height="26" style="--c:#F1F2F4;--b:#FFC929"><use/></svg></div><div class="lbl">32</div></div>
+      <div><div class="tile" style="width:16px;height:16px"><svg width="14" height="14" style="--c:#F1F2F4;--b:#FFC929"><use/></svg></div><div class="lbl">16</div></div>
+    </div>
+    <div class="bar dark">
+      <svg width="16" height="16" style="--c:#F1F2F4;--b:none;--bs:#F1F2F4"><use/></svg> idle
+      <svg width="16" height="16" style="--c:#F1F2F4;--b:#FFC929"><use/></svg> sending
+    </div>
+    <div class="bar light">
+      <svg width="16" height="16" style="--c:#17181C;--b:none;--bs:#17181C"><use/></svg> idle
+      <svg width="16" height="16" style="--c:#17181C;--b:#E0A800"><use/></svg> sending
+    </div>
+    <div class="word"><svg width="30" height="30" style="--c:#17181C;--b:#FFC929"><use/></svg>gigapair</div>
+    <p class="why"></p>
+    <div class="verdict"></div>
+  </section>
+</template>
+
+<script>
+const options = [
+  { id: 'a', name: 'A. Upright capsule',
+    why: 'The current one: a capsule split into two devices, the block between them. Upright halves read as two devices standing face to face.',
+    verdict: '<b>For:</b> the clearest "pair". <b>Against:</b> abstract; nothing says G.' },
+  { id: 'b', name: 'B. Wide capsule',
+    why: 'The same idea, wider than tall: the halves become a connector or a cable joint, the block crossing it. Reads more like a link.',
+    verdict: '<b>For:</b> horizontal, like a transfer. <b>Against:</b> less height, so it looks smaller in a square icon.' },
+  { id: 'c', name: 'C. G with a block',
+    why: 'A G whose crossbar is the yellow block: the data enters the letter. Simple and recognisable as the initial.',
+    verdict: '<b>For:</b> instantly "G", strong at 16 px. <b>Against:</b> loses the pair; many apps use a G.' },
+  { id: 'd', name: 'D. G built from blocks',
+    why: 'A G drawn with the same squares as the progress strip, one of them yellow: files move as blocks, and the name is spelled with them.',
+    verdict: '<b>For:</b> ties the logo to the block strip in the app; crisp on a pixel grid. <b>Against:</b> busier; pixel look.' },
+];
+const tpl = document.getElementById('tpl');
+for (const o of options) {
+  const n = tpl.content.cloneNode(true);
+  n.querySelector('h2').textContent = o.name;
+  n.querySelector('.why').textContent = o.why;
+  n.querySelector('.verdict').innerHTML = o.verdict;
+  n.querySelectorAll('use').forEach(u => u.setAttribute('href', '#' + o.id));
+  document.getElementById('opts').appendChild(n);
+}
+const refine = [
+  { id: 'g6', name: 'G6. Bar below the centre',
+    why: 'The previous step: top arm stops before the corner, the bar sits just below the middle of the letter.',
+    verdict: 'For comparison.' },
+  { id: 'g7', name: 'G7. Bar at the centre',
+    why: 'The bar, black spur and yellow block, raised to the exact middle of the letter. The mouth gets shorter, but the top arm stopping early keeps it open.',
+    verdict: '<b>Chosen.</b> Balanced; the block sits at the optical centre of the icon, and the open top arm keeps it a G.' },
+  { id: 'g8', name: 'G8. Bar above the centre',
+    why: 'The bar raised a bit more, closer to the top arm. The yellow block moves up into the eye line of the icon.',
+    verdict: '<b>For:</b> the yellow is the first thing you see. <b>Against:</b> the mouth is narrow; the G leans on the open top arm to read.' },
+];
+for (const o of refine) {
+  const n = tpl.content.cloneNode(true);
+  n.querySelector('h2').textContent = o.name;
+  n.querySelector('.why').textContent = o.why;
+  n.querySelector('.verdict').innerHTML = o.verdict;
+  n.querySelectorAll('use').forEach(u => u.setAttribute('href', '#' + o.id));
+  document.getElementById('refine').appendChild(n);
+}</script>
+</body>
+</html>

@@ -261,11 +261,16 @@ async fn offer_loop(inner: &Arc<Inner>, id: &str, token: &CancellationToken) {
                         }
                     }
                     OfferState::Accepted => {
+                        // The receiver may already be pulling data by the
+                        // time this check runs; don't hide that.
                         let current = inner.db.transfer(id).ok().flatten().map(|r| r.status);
-                        if current == Some(TransferStatus::WaitingAccept) {
+                        if matches!(
+                            current,
+                            Some(TransferStatus::WaitingAccept | TransferStatus::Queued)
+                        ) {
                             inner.set_status(id, TransferStatus::Queued);
+                            inner.set_note(id, Some(format!("Accepted; waiting for {name}")));
                         }
-                        inner.set_note(id, Some(format!("Accepted; waiting for {name}")));
                         return;
                     }
                     OfferState::Rejected { reason } => {

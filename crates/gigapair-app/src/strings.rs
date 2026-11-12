@@ -14,7 +14,6 @@ pub const KEEPING_AWAKE: &str = "Preventing sleep";
 pub const CONNECTING_SERVICE: &str = "Connecting to the Gigapair service…";
 pub const SELECT_CONTACT: &str = "Select a contact to send files, or add one.";
 
-pub const DROP_HINT: &str = "Drop files or folders here";
 pub const CHOOSE_FILES: &str = "Choose files…";
 pub const CHOOSE_FOLDER: &str = "Choose folder…";
 pub const AUTO_ACCEPT_LABEL: &str = "Accept transfers from this contact automatically";
@@ -23,7 +22,6 @@ pub const REMOVE: &str = "Remove contact";
 pub const REMOVE_CONFIRM: &str = "Click again to remove";
 
 pub const INCOMING: &str = "Incoming requests";
-pub const TRANSFERS: &str = "Transfers";
 pub const NO_TRANSFERS: &str = "No active transfers.";
 pub const ACCEPT: &str = "Accept";
 pub const ACCEPT_TO: &str = "Accept to…";
@@ -36,7 +34,6 @@ pub const OPEN_FOLDER: &str = "Open folder";
 pub const CLEAR_HISTORY: &str = "Clear history";
 pub const NO_HISTORY: &str = "No finished transfers yet.";
 pub const DIRECT: &str = "Direct";
-pub const VIA_RELAY: &str = "Via relay";
 pub const RELAY_SLOWER: &str =
     "Connected through a relay; this can be slower than a direct connection.";
 pub const DISMISS: &str = "Got it";
@@ -122,3 +119,69 @@ pub fn tray_requests(n: usize) -> String {
     }
 }
 pub const OPEN: &str = "Open";
+
+pub const ONLINE_SHORT: &str = "online";
+pub const OFFLINE_SHORT: &str = "offline";
+pub const WANTS_TO_SEND: &str = "wants to send you";
+pub const HISTORY_META: &str = "Finished transfers with every contact, newest first";
+pub const TODAY: &str = "Today";
+pub const YESTERDAY: &str = "Yesterday";
+pub const COMPLETED: &str = "Completed";
+pub const REJECTED_BY_YOU: &str = "Rejected by you";
+pub const SETTINGS_BEHAVIOUR: &str = "While Gigapair runs";
+pub const SETTINGS_NETWORK: &str = "Network";
+
+pub fn drop_hint(name: &str) -> String {
+    format!("Drop files or folders here to send them to {name}")
+}
+
+pub fn sending_to(name: &str) -> String {
+    format!("Sending to {name}")
+}
+
+pub fn receiving_from(name: &str) -> String {
+    format!("Receiving from {name}")
+}
+
+pub fn files(n: u64) -> String {
+    if n == 1 {
+        "1 file".into()
+    } else {
+        format!("{n} files")
+    }
+}
+
+pub fn sent_to(name: &str, files_count: u64) -> String {
+    format!("to {name}, {}", files(files_count))
+}
+
+pub fn received_from(name: &str, files_count: u64) -> String {
+    format!("from {name}, {}", files(files_count))
+}
+
+pub fn time_left(eta: &str) -> String {
+    format!("{eta} left")
+}
+
+pub fn of_total(total: &str, unit: &str) -> String {
+    format!("of {total} {unit}")
+}
+
+pub fn via_relay(name: Option<&str>) -> String {
+    match name {
+        Some(name) => format!("Via relay {name}"),
+        None => "Via relay".into(),
+    }
+}
+
+pub fn failed_at(percent: f64) -> String {
+    format!("Failed at {percent}%")
+}
+
+pub fn cancelled_at(percent: f64) -> String {
+    format!("Cancelled at {percent}%")
+}
+
+pub fn rejected_by(name: &str) -> String {
+    format!("Rejected by {name}")
+}
