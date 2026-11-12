@@ -95,3 +95,27 @@ pub fn expires_in(secs: i64) -> String {
 pub fn sent_warnings(n: usize) -> String {
     format!("{n} item(s) skipped (symlinks or unreadable); see the service log")
 }
+
+pub const SETTINGS_CLOSE_TO_TRAY: &str =
+    "Keep Gigapair in the tray when the window is closed (quit from the tray icon)";
+pub const TRAY_OPEN: &str = "Open Gigapair";
+pub const TRAY_QUIT: &str = "Quit Gigapair";
+pub const TRAY_IDLE: &str = "No active transfers";
+pub const TRAY_DISCONNECTED: &str = "Connecting to the service…";
+pub const TRAY_PAUSED: &str = "paused";
+
+pub fn tray_transfers(n: usize, percent: u32) -> String {
+    if n == 1 {
+        format!("1 transfer, {percent}%")
+    } else {
+        format!("{n} transfers, {percent}%")
+    }
+}
+
+pub fn tray_requests(n: usize) -> String {
+    if n == 1 {
+        "1 request waiting".into()
+    } else {
+        format!("{n} requests waiting")
+    }
+}

@@ -388,11 +388,26 @@ impl Db {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    pub fn set_status(&self, id: &str, status: TransferStatus) -> DbResult<()> {
+    /// Changes the status of an unfinished transfer. A finished one
+    /// (completed, rejected, cancelled or failed) keeps its status: the
+    /// first ending wins, so a late retry or error can't revive a transfer
+    /// that was cancelled meanwhile. Returns whether anything changed.
+    pub fn set_status(&self, id: &str, status: TransferStatus) -> DbResult<bool> {
         let finished = status.is_terminal().then(now_secs);
-        self.lock().execute(
-            "UPDATE transfers SET status = ?2, finished_at = COALESCE(?3, finished_at) WHERE id = ?1",
+        let changed = self.lock().execute(
+            "UPDATE transfers SET status = ?2, finished_at = COALESCE(?3, finished_at)
+             WHERE id = ?1 AND status NOT IN ('completed', 'rejected', 'cancelled', 'failed')",
             params![id, status.as_str(), finished],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Brings a finished transfer back to `status` (retrying a failed
+    /// download).
+    pub fn reopen(&self, id: &str, status: TransferStatus) -> DbResult<()> {
+        self.lock().execute(
+            "UPDATE transfers SET status = ?2, finished_at = NULL WHERE id = ?1",
+            params![id, status.as_str()],
         )?;
         Ok(())
     }
@@ -719,10 +734,23 @@ mod tests {
             }),
         )
         .unwrap();
-        db.set_status("t1", TransferStatus::Failed).unwrap();
+        assert!(db.set_status("t1", TransferStatus::Failed).unwrap());
         let t = db.transfer("t1").unwrap().unwrap();
         assert_eq!(t.status, TransferStatus::Failed);
         assert!(t.finished_at.is_some());
+        // A finished transfer keeps its status...
+        assert!(!db.set_status("t1", TransferStatus::Queued).unwrap());
+        assert!(!db.set_status("t1", TransferStatus::Cancelled).unwrap());
+        assert_eq!(
+            db.transfer("t1").unwrap().unwrap().status,
+            TransferStatus::Failed
+        );
+        // ...unless explicitly reopened.
+        db.reopen("t1", TransferStatus::Queued).unwrap();
+        let t = db.transfer("t1").unwrap().unwrap();
+        assert_eq!(t.status, TransferStatus::Queued);
+        assert!(t.finished_at.is_none());
+        assert!(db.set_status("t1", TransferStatus::Failed).unwrap());
         assert_eq!(t.conn.unwrap().kind, ConnKind::Relay);
         assert_eq!(t.sources, vec!["/a".to_string()]);
 

@@ -106,6 +106,10 @@ If you'd rather avoid the warning, install with `cargo install`, Homebrew or Sco
 2. **Send:** drag files or folders onto the contact.
 3. **Receive:** accept the incoming request, or turn on **Auto-accept** for that contact.
 
+Closing the window keeps Gigapair in the system tray (the notification area on Windows, the panel on Linux), showing the overall progress. Click the tray icon to bring the window back; quit from its menu. Quitting the app doesn't stop transfers: the background service keeps them going. To make the close button quit instead, turn off **Keep Gigapair in the tray** in Settings (`gigapair config set close_to_tray off`). Launching the app again while it's in the tray shows the existing window. `gigapair-app --background` starts it in the tray without opening the window.
+
+On Linux the tray icon uses the StatusNotifierItem standard: KDE, COSMIC, Xfce, Cinnamon and most panels show it; GNOME needs the "AppIndicator and KStatusNotifierItem Support" extension. Without a tray, closing the window quits the app.
+
 ### CLI
 
 The CLI binary is `gigapair` (optional short alias: `gpair`).
@@ -184,12 +188,12 @@ Setting the `GIGAPAIR_HOME` environment variable (or passing `--home <dir>` to `
 | --- | --- | --- |
 | 1. Core + CLI ✅ (implemented; real-network acceptance test pending) | `gigapair-core`, `gigapaird` and CLI with pair, send, accept, status and resume | 50 GB between Windows and macOS on different networks, with two forced interruptions, identical hash |
 | 2. Minimal UI ✅ (implemented) | GPUI window with contacts, drag and drop and progress | A full transfer without touching the terminal |
-| 3. Robustness 🟡 (all but the tray icon) | Keep-awake, persistence, queue, history, notifications, tray | Reboot mid-transfer and resume automatically |
+| 3. Robustness ✅ (implemented; reboot test pending) | Keep-awake, persistence, queue, history, notifications, tray | Reboot mid-transfer and resume automatically |
 | 4. Distribution | Releases (MSI, DMG, AppImage, `.deb`), checksums, attestations, service install | Clean install on all three OSes and a headless server receiving |
 
 ## Building from source
 
-Requires Rust 1.89 or newer ([rustup](https://rustup.rs/)).
+Requires Rust 1.90 or newer ([rustup](https://rustup.rs/)).
 
 - **Windows:** install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload (MSVC and the Windows SDK).
 - **macOS:** Xcode command line tools (`xcode-select --install`).
