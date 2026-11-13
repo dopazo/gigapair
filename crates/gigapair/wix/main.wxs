@@ -57,7 +57,8 @@
 <?endif ?>
 
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'
-     xmlns:fire='http://schemas.microsoft.com/wix/FirewallExtension'>
+     xmlns:fire='http://schemas.microsoft.com/wix/FirewallExtension'
+     xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'>
 
     <Product
         Id='*'
@@ -81,11 +82,33 @@
 
         <!-- AllowSameVersionUpgrades: a rebuild with the same version
              replaces the installed one instead of adding a second entry to
-             Installed apps. -->
+             Installed apps. afterInstallExecute: the old version is removed
+             after the new files are in, so Gigapair is closed first (see
+             CloseApplication below) rather than mid-uninstall. -->
         <MajorUpgrade
             AllowSameVersionUpgrades='yes'
-            Schedule='afterInstallInitialize'
+            Schedule='afterInstallExecute'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <!-- Close Gigapair before replacing its files. The service has no
+             window, so Restart Manager can't close it and only offers a
+             reboot; instead the installer ends the service and the app
+             itself. Quitting the app never stops a transfer, and an
+             interrupted transfer resumes from its verified blocks when the
+             service starts again (the app starts it on launch). -->
+        <Property Id='MSIRESTARTMANAGERCONTROL' Value='Disable'/>
+        <util:CloseApplication
+            Id='CloseService'
+            Target='gigapaird.exe'
+            CloseMessage='no'
+            TerminateProcess='0'
+            RebootPrompt='no'/>
+        <util:CloseApplication
+            Id='CloseApp'
+            Target='gigapair-app.exe'
+            CloseMessage='no'
+            TerminateProcess='0'
+            RebootPrompt='no'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
         <Property Id='DiskPrompt' Value='gigapair Installation'/>
