@@ -26,6 +26,9 @@ upgrade-guid = "7FC4FC57-C10D-482F-A782-408083EADDE1"
 path-guid = "CAD8EA07-1DA5-41D0-8968-6D220CC8847B"
 license = false
 eula = false
+# The firewall exception for gigapaird (main.wxs) needs this extension.
+compiler-args = ["-ext", "WixFirewallExtension"]
+linker-args = ["-ext", "WixFirewallExtension"]
 
 [dependencies]
 gigapair-app = { path = "../gigapair-app" }

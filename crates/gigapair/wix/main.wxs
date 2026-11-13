@@ -56,7 +56,8 @@
     <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 <?endif ?>
 
-<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'
+     xmlns:fire='http://schemas.microsoft.com/wix/FirewallExtension'>
 
     <Product
         Id='*'
@@ -146,7 +147,18 @@
                                 Name='gigapaird.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\gigapaird.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'>
+                                <!-- The service is the only process that talks to the
+                                     network. Allowing it here means no firewall prompt
+                                     on first run, and direct (not relayed) connections
+                                     from contacts. Removed on uninstall. -->
+                                <fire:FirewallException
+                                    Id='GigapairdFirewall'
+                                    Name='Gigapair service'
+                                    Scope='any'
+                                    Profile='all'
+                                    IgnoreFailure='yes'/>
+                            </File>
                         </Component>
                         <Component Id='binary3' Guid='*'>
                             <File
