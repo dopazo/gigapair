@@ -35,7 +35,7 @@ No telemetry, and no network traffic except to your contact and, when needed, a 
 
 ## Install
 
-Download from the [latest release](https://github.com/dopazo/gigapair/releases/latest). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`).
+Download from the [releases page](https://github.com/dopazo/gigapair/releases). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`). So far there are only pre-releases, which GitHub never marks as *latest*: until the first stable release, take the files, or the same install commands with the version in the address, from the [newest pre-release](https://github.com/dopazo/gigapair/releases).
 
 | Platform | How |
 | --- | --- |
