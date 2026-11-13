@@ -2,16 +2,72 @@
 
 ## Installation
 
-Download from the [releases page](https://github.com/dopazo/gigapair/releases). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`), installed side by side. So far there are only pre-releases, which GitHub never marks as *latest*: until the first stable release, take the files, or the same install commands with the version in the address, from the [newest pre-release](https://github.com/dopazo/gigapair/releases).
+Download from the [releases page](https://github.com/dopazo/gigapair/releases), or install from a terminal (below). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`), installed side by side.
 
 | Platform | How |
 | --- | --- |
-| Windows | `gigapair-x86_64-pc-windows-msvc.msi`: installs to Program Files, adds a **Gigapair** entry to the Start menu and puts the CLI on the `PATH`. Or, in PowerShell: `powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/releases/latest/download/gigapair-installer.ps1 \| iex"` |
-| macOS (Apple silicon and Intel) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/latest/download/gigapair-installer.sh \| sh`, then run `gigapair-app` |
-| Linux (x86_64, glibc 2.35+) | Same shell installer, then run `gigapair-app` |
+| Windows | `gigapair-x86_64-pc-windows-msvc.msi`: installs to Program Files for all users, adds a **Gigapair** entry to the Start menu, puts the CLI on the `PATH` and adds a firewall exception for the service. Asks for administrator rights |
+| macOS (Apple silicon and Intel) | The shell installer below, then run `gigapair-app` |
+| Linux (x86_64, glibc 2.35+) | The shell installer below, then run `gigapair-app` |
 | Any | The `.zip`/`.tar.xz` archives: unpack and keep the four programs in the same folder |
 
-The shell and PowerShell installers put the programs in `~/.cargo/bin` (Windows: `%USERPROFILE%\.cargo\bin`) and add it to the `PATH`. They never update themselves: Gigapair contacts nothing but your contacts and the relay.
+### From a terminal
+
+macOS and Linux:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+```
+
+Windows (PowerShell): downloads the MSI and installs it with only a progress bar. Windows asks once for administrator rights (the UAC prompt, which you approve). The MSI is the recommended way, from a terminal too, because only the MSI adds the firewall exception:
+
+```powershell
+$msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
+iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
+$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
+if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
+```
+
+**Unattended (scripts, servers, AI agents).** Run from a prompt that already has administrator rights: nothing can approve a UAC prompt on your behalf, so a script that asks for one would wait forever. This version shows no window, and its output says what happened, so whoever runs it doesn't need to read the log:
+
+```powershell
+$v = 'v0.1.0-beta.1'
+$msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) { 'Gigapair: run this from an administrator prompt (the MSI installs for all users).'; exit 1 }
+iwr "https://github.com/dopazo/gigapair/releases/download/$v/gigapair-x86_64-pc-windows-msvc.msi" -OutFile $msi
+$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /qn /norestart /l*v `"$log`"" -Wait -PassThru
+switch ($p.ExitCode) {
+  0       { "Gigapair installed: $(& "$env:ProgramFiles\gigapair\bin\gigapair.exe" --version)" }
+  3010    { 'Gigapair installed; restart Windows to finish.' }
+  default {
+    "Gigapair install failed: msiexec exit code $($p.ExitCode). Full log: $log"
+    Select-String -Path $log -Pattern '^Error \d{4}\.' | Select-Object -Last 3 | ForEach-Object { $_.Line.Trim() }
+    exit $p.ExitCode
+  }
+}
+```
+
+It ends with exit code 0 when Gigapair is installed, and otherwise with the code from `msiexec` (for example 1603, a fatal error; 1618, another installation is running), printing the installer's own error messages, such as:
+
+```text
+Gigapair install failed: msiexec exit code 1603. Full log: C:\Users\me\AppData\Local\Temp\gigapair-install.log
+Error 1925. You do not have sufficient privileges to complete this installation for all users of the machine.  Log on as administrator and then retry this installation.
+```
+
+`exit` ends the PowerShell session: run it as a script (`powershell -File install.ps1`) or with `powershell -Command`, not pasted into a window you want to keep. A new terminal is needed to find `gigapair` on the `PATH`; the full path is `C:\Program Files\gigapair\bin\gigapair.exe`.
+
+The commands name a version because so far there are only pre-releases, which GitHub never marks as *latest*; use the newest one from the [releases page](https://github.com/dopazo/gigapair/releases). From the first stable release, `releases/latest/download/...` will always point to the newest.
+
+The shell installer puts the programs in your user folder, `~/.cargo/bin`, and adds it to your `PATH`; it needs no administrator rights. They never update themselves: Gigapair contacts nothing but your contacts and the relay.
+
+**Windows without administrator rights.** If you can't install the MSI, a PowerShell installer installs for your user only, in `%USERPROFILE%\.cargo\bin`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.ps1 | iex"
+```
+
+It adds no Start menu entry (start the app with `gigapair-app`) and no firewall exception: Windows asks the first time the service runs, and allowing it needs an administrator. Without the exception, contacts can't open a connection to this computer directly, so more transfers go through a relay and may be slower. Prefer the MSI.
 
 Not available yet: a macOS `.app` bundle (DMG), AppImage, `.deb`, winget, Scoop, Homebrew and `cargo install`. They are planned for later releases.
 
@@ -182,13 +238,34 @@ The app and the CLI start `gigapaird` on their own when it isn't running, so it 
 
 ## Headless server
 
-To set up a machine that only receives:
+A machine that only receives (a home server, a NAS, a render node) needs only the CLI and the service; the desktop app installed next to them is simply never started. Linux is the best fit today; see [Limitations](#server-limitations) for Windows and macOS.
+
+**1. Install** with the shell installer (Linux, macOS) or the unattended MSI script (Windows), as in [From a terminal](#from-a-terminal):
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+```
+
+**2. Start the service at boot:**
 
 ```sh
 gigapair service install
-gigapair pair <code-from-your-desktop>
-gigapair contacts trust <contact> --auto-accept on
+loginctl enable-linger $USER      # Linux: run without anyone logged in
 ```
+
+**3. Pair it and let it receive on its own.** On your desktop, click **Add contact** (or run `gigapair pair`) and copy the code; then, on the server:
+
+```sh
+gigapair pair <code-from-your-desktop> --name "Workstation"
+gigapair contacts trust Workstation --auto-accept on
+gigapair config set download_dir /srv/incoming
+```
+
+Check that both sides show the same four words before confirming: that check is what proves no one intercepted the code.
+
+**4. Check it:** `gigapair status` shows whether the service runs and what it is receiving, and `gigapair history` what arrived.
+
+Without a desktop session there is usually no keyring, so the node key is stored in a file readable only by its user (see [Where data is stored](#where-data-is-stored)).
 
 Example `config.toml`:
 
@@ -210,7 +287,17 @@ The service uses each platform's native mechanism:
 | macOS | LaunchAgent in `~/Library/LaunchAgents` |
 | Windows | Start at login (`HKCU\...\Run`, no administrator rights needed) |
 
-System-wide variants (a Windows Service, a Linux system unit with a dedicated user) are planned with the installers.
+### Server limitations
+
+| Limitation | Effect |
+| --- | --- |
+| Windows: the service starts when its user **logs in** (`HKCU\...\Run`), not as a Windows Service | After a reboot, nothing is received until that user signs in |
+| macOS: a LaunchAgent runs only in a logged-in session | Same as on Windows |
+| Linux builds are x86_64 with glibc 2.35+ only | No ARM (Raspberry Pi, most NAS), no musl (Alpine), no older distributions such as RHEL 8 |
+| The service runs as a user, not as a system account | Run it as a dedicated user (for example `gigapair`) if the machine is shared |
+| Windows without the MSI (PowerShell installer): no firewall exception | More transfers go through a relay; install the MSI instead |
+
+A Windows Service, a Linux system unit with a dedicated user and settings in `/etc/gigapair`, and ARM Linux builds are planned.
 
 ## Where data is stored
 

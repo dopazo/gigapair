@@ -35,13 +35,28 @@ No telemetry, and no network traffic except to your contact and, when needed, a 
 
 ## Install
 
-Download from the [releases page](https://github.com/dopazo/gigapair/releases). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`). So far there are only pre-releases, which GitHub never marks as *latest*: until the first stable release, take the files, or the same install commands with the version in the address, from the [newest pre-release](https://github.com/dopazo/gigapair/releases).
+Download from the [releases page](https://github.com/dopazo/gigapair/releases). Every package contains the desktop app (`gigapair-app`), the CLI (`gigapair`, alias `gpair`) and the background service (`gigapaird`).
 
 | Platform | How |
 | --- | --- |
 | Windows 10/11 | `gigapair-x86_64-pc-windows-msvc.msi`: adds **Gigapair** to the Start menu, the CLI to the `PATH`, and a firewall exception for the service |
-| macOS (Apple silicon and Intel) | `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/latest/download/gigapair-installer.sh \| sh`, then run `gigapair-app` |
-| Linux (x86_64, glibc 2.35+) | Same shell installer, then run `gigapair-app` |
+| macOS (Apple silicon and Intel) | The shell installer below, then run `gigapair-app` |
+| Linux (x86_64, glibc 2.35+) | The shell installer below, then run `gigapair-app` |
+
+Or install from a terminal, which also suits servers:
+
+```sh
+# macOS and Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+
+# Windows (PowerShell): downloads the MSI and installs it with a progress bar
+$msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
+iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
+$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
+if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
+```
+
+So far there are only pre-releases, which GitHub never marks as *latest*: replace the version with the newest one on the releases page. Unattended installs (scripts, servers, AI agents), installing without administrator rights and setting up a server that receives on its own are in [docs/usage.md](docs/usage.md#from-a-terminal).
 
 The binaries are not code-signed yet. On Windows, SmartScreen asks once: **More info → Run anyway**. On macOS: **System Settings → Privacy & Security → Open Anyway**. Every release ships SHA-256 checksums and [build attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (`gh attestation verify <file> --repo dopazo/gigapair`).
 

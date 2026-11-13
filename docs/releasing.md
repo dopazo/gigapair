@@ -16,7 +16,7 @@ Only the `gigapair` package (`crates/gigapair`) is released: it holds every exec
 ## Cutting a release
 
 1. Make sure `main` is green.
-2. Bump `version` in the root `Cargo.toml` (`[workspace.package]`), run `cargo build` so `Cargo.lock` follows, and merge that change to `main`.
+2. Bump `version` in the root `Cargo.toml` (`[workspace.package]`), run `cargo build` so `Cargo.lock` follows, and update the version in the install commands of `README.md` and `docs/usage.md` (they name it while there are only pre-releases; from the first stable release they can use `releases/latest/download/`). Merge that change to `main`.
 3. Tag the merge commit and push the tag:
 
    ```sh
