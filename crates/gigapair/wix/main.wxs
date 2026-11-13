@@ -60,7 +60,7 @@
 
     <Product
         Id='*'
-        Name='gigapair'
+        Name='Gigapair'
         UpgradeCode='7FC4FC57-C10D-482F-A782-408083EADDE1'
         Manufacturer='Gigapair contributors'
         Language='1033'
@@ -78,7 +78,11 @@
             SummaryCodepage='1252'
             />
 
+        <!-- AllowSameVersionUpgrades: a rebuild with the same version
+             replaces the installed one instead of adding a second entry to
+             Installed apps. -->
         <MajorUpgrade
+            AllowSameVersionUpgrades='yes'
             Schedule='afterInstallInitialize'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
 
@@ -168,7 +172,8 @@
                     Name='Gigapair'
                     Description='Move very large files between your devices'
                     Target='[#exe1]'
-                    WorkingDirectory='Bin'/>
+                    WorkingDirectory='Bin'
+                    Icon='ProductICO'/>
                 <RemoveFolder Id='CleanUpShortcut' Directory='ApplicationProgramsFolder' On='uninstall'/>
                 <RegistryValue
                     Root='HKCU'
@@ -221,8 +226,8 @@
           The product icon is the graphic that appears in the Add/Remove
           Programs control panel for the application.
         -->
-        <!--<Icon Id='ProductICO' SourceFile='wix\Product.ico'/>-->
-        <!--<Property Id='ARPPRODUCTICON' Value='ProductICO' />-->
+        <Icon Id='ProductICO' SourceFile='assets\gigapair.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO' />
 
         <Property Id='ARPHELPLINK' Value='https://github.com/dopazo/gigapair'/>
         

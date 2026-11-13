@@ -7,7 +7,7 @@ Releases are built by [dist](https://opensource.axo.dev/cargo-dist/) (cargo-dist
 For each target (Windows x86_64, macOS arm64 and x86_64, Linux x86_64 glibc):
 
 - an archive (`.zip` on Windows, `.tar.xz` elsewhere) with `gigapair-app`, `gigapair`, `gpair` and `gigapaird`, plus `README.md` and `LICENSE`;
-- on Windows, an MSI (`crates/gigapair/wix/main.wxs`) that installs to Program Files, adds the CLI to the `PATH` and a **Gigapair** Start menu entry for the app;
+- on Windows, an MSI (`crates/gigapair/wix/main.wxs`) that installs to Program Files, adds the CLI to the `PATH` and a **Gigapair** Start menu entry for the app. Installing any MSI replaces the installed one, including a rebuild with the same version (`AllowSameVersionUpgrades`); installing an older version is refused. The executables carry the app icon (`crates/gigapair/build.rs`, `assets/gigapair.ico`);
 - shell (`gigapair-installer.sh`) and PowerShell (`gigapair-installer.ps1`) installers, without a self-updater;
 - SHA-256 checksums (`sha256.sum` and one `.sha256` per file) and GitHub build attestations.
 
@@ -35,4 +35,4 @@ Edit `dist-workspace.toml` and run `dist generate` (install with `cargo install 
 
 ## Not yet
 
-DMG and a macOS `.app` bundle, AppImage, `.deb`, winget, Scoop, Homebrew, publishing to crates.io, code signing, a real app icon, the Windows Service / Linux system unit for servers and the "new release available" notice.
+DMG and a macOS `.app` bundle, AppImage, `.deb`, winget, Scoop, Homebrew, publishing to crates.io, code signing, the macOS/Linux app icon, the Windows Service / Linux system unit for servers and the "new release available" notice.

@@ -33,5 +33,9 @@ gigapair-cli = { path = "../gigapair-cli" }
 gigapaird = { path = "../gigapaird" }
 anyhow = "1"
 
+[build-dependencies]
+# Windows icon resource (MIT/Apache-2.0).
+embed-resource = "3"
+
 [lints]
 workspace = true

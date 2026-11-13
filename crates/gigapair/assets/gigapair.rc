@@ -1,0 +1,3 @@
+// Icon resource 1: GPUI loads it as the window icon, and Windows uses it
+// for the .exe in Explorer, the Start menu and the taskbar.
+1 ICON "gigapair.ico"

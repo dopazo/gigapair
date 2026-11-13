@@ -115,7 +115,7 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 ## Known gaps / next steps
 
 1. Manual acceptance test of stage 1 across two real networks (one behind CGNAT) with relays; check `direct`/`relay` labelling and the first-relay notice.
-2. Tray (RF-14): implemented in `gigapair-app` (`shell.rs`, `tray/`, `single.rs`). Verified on Linux only; the Windows code is cross-checked (`cargo check --target x86_64-pc-windows-gnu`) but not run, macOS is compiled in CI but untested. The tray icon is the G mark drawn in `icon.rs`; the window, `.exe` and installer icons still lack it. Pending: macOS manual test, the stage 3 reboot test, exe/installer icon.
+2. Tray (RF-14): implemented in `gigapair-app` (`shell.rs`, `tray/`, `single.rs`). Verified on Linux only; the Windows code is cross-checked (`cargo check --target x86_64-pc-windows-gnu`) but not run, macOS is compiled in CI but untested. The tray icon is the G mark drawn in `icon.rs`; on Windows the `.exe`, window and MSI use `crates/gigapair/assets/gigapair.ico` (embedded by `build.rs`). Pending: macOS manual test, the stage 3 reboot test, macOS/Linux app icon.
 3. Distribution follow-ups: DMG/`.app` bundle, AppImage, `.deb`, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); "new release available" notice (must respect no-telemetry: opt-in or clearly explained). The release pipeline has never run: the first tag is its test.
 4. Relay: the first-use notice is emitted once per install; the app shows it as a banner, the CLI prints it during `send`.
 5. No LAN discovery (iroh 1.4 has no mDNS); contacts rely on n0 DNS (relay URL only) plus stored addresses and a stable UDP port.
