@@ -43,7 +43,18 @@ pub struct ServiceStatus {
 }
 
 fn run(cmd: &str, args: &[&str]) -> Result<String, ServiceError> {
-    let out = Command::new(cmd).args(args).output()?;
+    let mut command = Command::new(cmd);
+    command.args(args);
+    // From the desktop app (a GUI process with no console), a console tool
+    // like `reg` would get a new console window, or a Windows Terminal tab,
+    // which takes seconds to start and flashes on screen.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = command.output()?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
