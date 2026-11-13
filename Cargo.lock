@@ -2456,7 +2456,7 @@ dependencies = [
 
 [[package]]
 name = "gigapair"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "anyhow",
  "embed-resource",
@@ -2467,7 +2467,7 @@ dependencies = [
 
 [[package]]
 name = "gigapair-app"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "gigapair-cli"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2494,7 +2494,7 @@ dependencies = [
 
 [[package]]
 name = "gigapair-core"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "blake3",
  "data-encoding",
@@ -2521,7 +2521,7 @@ dependencies = [
 
 [[package]]
 name = "gigapaird"
-version = "0.1.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "anyhow",
  "clap",
