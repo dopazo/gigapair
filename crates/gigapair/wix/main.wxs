@@ -56,11 +56,13 @@
     <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 <?endif ?>
 
-<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
+<Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'
+     xmlns:fire='http://schemas.microsoft.com/wix/FirewallExtension'
+     xmlns:util='http://schemas.microsoft.com/wix/UtilExtension'>
 
     <Product
         Id='*'
-        Name='gigapair'
+        Name='Gigapair'
         UpgradeCode='7FC4FC57-C10D-482F-A782-408083EADDE1'
         Manufacturer='Gigapair contributors'
         Language='1033'
@@ -78,9 +80,35 @@
             SummaryCodepage='1252'
             />
 
+        <!-- AllowSameVersionUpgrades: a rebuild with the same version
+             replaces the installed one instead of adding a second entry to
+             Installed apps. afterInstallExecute: the old version is removed
+             after the new files are in, so Gigapair is closed first (see
+             CloseApplication below) rather than mid-uninstall. -->
         <MajorUpgrade
-            Schedule='afterInstallInitialize'
+            AllowSameVersionUpgrades='yes'
+            Schedule='afterInstallExecute'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.'/>
+
+        <!-- Close Gigapair before replacing its files. The service has no
+             window, so Restart Manager can't close it and only offers a
+             reboot; instead the installer ends the service and the app
+             itself. Quitting the app never stops a transfer, and an
+             interrupted transfer resumes from its verified blocks when the
+             service starts again (the app starts it on launch). -->
+        <Property Id='MSIRESTARTMANAGERCONTROL' Value='Disable'/>
+        <util:CloseApplication
+            Id='CloseService'
+            Target='gigapaird.exe'
+            CloseMessage='no'
+            TerminateProcess='0'
+            RebootPrompt='no'/>
+        <util:CloseApplication
+            Id='CloseApp'
+            Target='gigapair-app.exe'
+            CloseMessage='no'
+            TerminateProcess='0'
+            RebootPrompt='no'/>
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1'/>
         <Property Id='DiskPrompt' Value='gigapair Installation'/>
@@ -142,7 +170,18 @@
                                 Name='gigapaird.exe'
                                 DiskId='1'
                                 Source='$(var.CargoTargetBinDir)\gigapaird.exe'
-                                KeyPath='yes'/>
+                                KeyPath='yes'>
+                                <!-- The service is the only process that talks to the
+                                     network. Allowing it here means no firewall prompt
+                                     on first run, and direct (not relayed) connections
+                                     from contacts. Removed on uninstall. -->
+                                <fire:FirewallException
+                                    Id='GigapairdFirewall'
+                                    Name='Gigapair service'
+                                    Scope='any'
+                                    Profile='all'
+                                    IgnoreFailure='yes'/>
+                            </File>
                         </Component>
                         <Component Id='binary3' Guid='*'>
                             <File
@@ -168,7 +207,8 @@
                     Name='Gigapair'
                     Description='Move very large files between your devices'
                     Target='[#exe1]'
-                    WorkingDirectory='Bin'/>
+                    WorkingDirectory='Bin'
+                    Icon='ProductICO'/>
                 <RemoveFolder Id='CleanUpShortcut' Directory='ApplicationProgramsFolder' On='uninstall'/>
                 <RegistryValue
                     Root='HKCU'
@@ -221,8 +261,8 @@
           The product icon is the graphic that appears in the Add/Remove
           Programs control panel for the application.
         -->
-        <!--<Icon Id='ProductICO' SourceFile='wix\Product.ico'/>-->
-        <!--<Property Id='ARPPRODUCTICON' Value='ProductICO' />-->
+        <Icon Id='ProductICO' SourceFile='assets\gigapair.ico'/>
+        <Property Id='ARPPRODUCTICON' Value='ProductICO' />
 
         <Property Id='ARPHELPLINK' Value='https://github.com/dopazo/gigapair'/>
         
