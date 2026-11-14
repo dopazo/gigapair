@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gigapair_core::api::{Event, RELAY_NOTICE, Request, Response, StatusInfo};
+use gigapair_core::api::{Event, RELAY_NOTICE, Request, Response, StatusInfo, same_network_hint};
 use gigapair_core::dirs::AppDirs;
 use gigapair_core::types::{
     ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
@@ -53,6 +53,8 @@ pub struct GigapairApp {
     page: Page,
     pair_code: Option<(String, i64)>,
     relay_banner: Option<String>,
+    /// The "What is a relay?" panel in the settings is open.
+    relay_info_open: bool,
     remove_armed: bool,
     /// The contact page shows the rename field.
     renaming: bool,
@@ -106,6 +108,7 @@ impl GigapairApp {
             page: Page::AddContact,
             pair_code: None,
             relay_banner: None,
+            relay_info_open: false,
             remove_armed: false,
             renaming: false,
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
@@ -820,6 +823,17 @@ impl GigapairApp {
                             .text_color(p.ink_3)
                             .child(div().flex_shrink_0().child(s::files(t.file_count)))
                             .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
+                    )
+                    .children(
+                        t.conn
+                            .as_ref()
+                            .filter(|c| c.kind == ConnKind::Relay && c.same_network)
+                            .map(|_| {
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.ink_2)
+                                    .child(same_network_hint(&t.peer_name))
+                            }),
                     ),
             )
             .child(
@@ -1706,6 +1720,36 @@ impl GigapairApp {
                 self,
                 cx,
             ))
+            .child(note(s::SETTINGS_DIRECT_ONLY_NOTE))
+            .child(
+                h_flex()
+                    .id("relay-info-toggle")
+                    .gap(px(6.))
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.ink_2)
+                    .child(if self.relay_info_open { "▾" } else { "▸" })
+                    .child(s::RELAY_INFO_TITLE)
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.relay_info_open = !app.relay_info_open;
+                        cx.notify();
+                    })),
+            )
+            .when(self.relay_info_open, |el| {
+                el.child(
+                    v_flex()
+                        .gap(px(6.))
+                        .p(px(10.))
+                        .rounded(px(8.))
+                        .bg(p.surface)
+                        .border_1()
+                        .border_color(p.line)
+                        .text_size(px(12.))
+                        .text_color(p.ink_2)
+                        .children(s::RELAY_INFO.iter().map(|para| div().child(*para))),
+                )
+            })
             .child(switch(
                 "sw-discovery",
                 s::SETTINGS_DISCOVERY,

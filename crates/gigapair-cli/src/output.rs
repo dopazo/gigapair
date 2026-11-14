@@ -1,7 +1,9 @@
 //! Tables, progress lines and the terminal QR code.
 
+use gigapair_core::api::same_network_hint;
 use gigapair_core::types::{
-    Contact, Direction, TransferInfo, TransferStatus, format_bytes, format_duration, short_id,
+    ConnKind, Contact, Direction, TransferInfo, TransferStatus, format_bytes, format_duration,
+    short_id,
 };
 
 /// The pairing code as a QR made of Unicode half blocks.
@@ -69,6 +71,12 @@ pub fn print_transfers(list: &[TransferInfo]) {
             line.push_str(&format!("  [{conn}]"));
         }
         println!("{line}");
+        if let Some(c) = &t.conn
+            && c.kind == ConnKind::Relay
+            && c.same_network
+        {
+            println!("          {}", same_network_hint(&t.peer_name));
+        }
         if let Some(note) = &t.note {
             println!("          {note}");
         }

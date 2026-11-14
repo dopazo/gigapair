@@ -211,7 +211,7 @@ gigapair contacts remove "Edit Suite"
 gigapair config get
 gigapair config set download_dir D:\Incoming
 gigapair config set upload_limit_kib 20000    # about 20 MB/s; 0 is unlimited
-gigapair config set direct_only true          # never use a relay
+gigapair config set direct_only true          # file data never goes through a relay (setup still does)
 gigapair config set relay_url https://relay.example.com
 gigapair config set relay_url ""              # back to the public relays
 ```
@@ -296,6 +296,7 @@ The service uses each platform's native mechanism:
 | Linux builds are x86_64 with glibc 2.35+ only | No ARM (Raspberry Pi, most NAS), no musl (Alpine), no older distributions such as RHEL 8 |
 | The service runs as a user, not as a system account | Run it as a dedicated user (for example `gigapair`) if the machine is shared |
 | Windows without the MSI (PowerShell installer): no firewall exception | More transfers go through a relay; install the MSI instead |
+| Two devices on the same router but on different Wi-Fi networks (or Wi-Fi and cable) that the router keeps apart | The transfer goes through a relay; connect both to the same network |
 
 A Windows Service, a Linux system unit with a dedicated user and settings in `/etc/gigapair`, and ARM Linux builds are planned.
 

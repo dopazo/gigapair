@@ -185,6 +185,14 @@ could not be made. The relay only forwards end-to-end encrypted data and cannot 
 but it can see both devices' IP addresses, when you transfer and how much. You can turn on \
 \"direct only\" or use your own relay in the settings.";
 
+/// Shown next to a relayed transfer when the other device looks to be on
+/// the same local network.
+pub fn same_network_hint(name: &str) -> String {
+    format!(
+        "You and {name} seem to be behind the same router, but a direct connection could not be made. Make sure both devices are on the same network (the same Wi-Fi name, or both on cable) and send again."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

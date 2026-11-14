@@ -440,7 +440,17 @@ impl Inner {
         self.emit_transfer(id);
     }
 
-    pub fn set_conn(&self, id: &str, conn: Option<ConnInfo>) {
+    pub fn set_conn(&self, id: &str, mut conn: Option<ConnInfo>) {
+        if let Some(c) = conn.as_mut()
+            && c.kind == crate::types::ConnKind::Relay
+        {
+            c.same_network = self
+                .db
+                .transfer(id)
+                .ok()
+                .flatten()
+                .is_some_and(|r| self.peer_on_same_network(&r.peer));
+        }
         let changed = {
             let mut live = self.live();
             let l = live.entry(id.to_owned()).or_default();
@@ -454,6 +464,7 @@ impl Inner {
                     transfer = id,
                     kind = ?c.kind,
                     relay = c.relay.as_deref().unwrap_or("-"),
+                    same_network = c.same_network,
                     "transfer connection path changed"
                 ),
                 None => tracing::info!(transfer = id, "transfer has no connection path"),
