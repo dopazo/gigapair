@@ -18,7 +18,9 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Disableable, Sizable, Theme, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Sizable, Theme, ThemeMode, WindowExt, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, AppContext, ClipboardItem, Context, Div, Entity, ExternalPaths, FontFeatures,
@@ -86,8 +88,11 @@ impl GigapairApp {
         })
         .detach();
 
-        cx.observe_window_appearance(window, |_, window, cx| {
-            Theme::sync_system_appearance(Some(window), cx);
+        cx.observe_window_appearance(window, |app, window, cx| {
+            // Only a "system" choice follows the operating system.
+            if !matches!(app.config_str("theme").as_str(), "light" | "dark") {
+                Theme::sync_system_appearance(Some(window), cx);
+            }
         })
         .detach();
 
@@ -239,6 +244,7 @@ impl GigapairApp {
                     app.config = entries.into_iter().map(|e| (e.key, e.value)).collect();
                     let close_to_tray = app.config_bool("close_to_tray");
                     shell::set_close_to_tray(close_to_tray, cx);
+                    apply_theme(&app.config_str("theme"), window, cx);
                     let relay = app.config_str("relay_url");
                     let limit = app.config_str("upload_limit_kib");
                     app.relay_input
@@ -1678,6 +1684,27 @@ impl GigapairApp {
                             })),
                     ),
             )
+            .child(label(s::SETTINGS_APPEARANCE))
+            .child(
+                h_flex().gap(px(6.)).children(
+                    [
+                        ("theme-system", s::THEME_SYSTEM, "system"),
+                        ("theme-light", s::THEME_LIGHT, "light"),
+                        ("theme-dark", s::THEME_DARK, "dark"),
+                    ]
+                    .map(|(id, text, value)| {
+                        let current = self.config_str("theme");
+                        let selected =
+                            current == value || (value == "system" && current.is_empty());
+                        Button::new(id)
+                            .label(text)
+                            .when(selected, |b| b.primary())
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                app.set_config("theme", value.to_owned(), window, cx)
+                            }))
+                    }),
+                ),
+            )
             .child(label(s::SETTINGS_BEHAVIOUR))
             .child(switch(
                 "sw-awake",
@@ -1893,6 +1920,16 @@ impl Render for GigapairApp {
             .text_size(px(13.))
             .child(self.render_sidebar(cx))
             .child(main)
+    }
+}
+
+/// Applies the `theme` setting: `light` or `dark` force that scheme,
+/// anything else follows the operating system.
+fn apply_theme(choice: &str, window: &mut Window, cx: &mut gpui_kit::App) {
+    match choice {
+        "light" => Theme::change(ThemeMode::Light, Some(window), cx),
+        "dark" => Theme::change(ThemeMode::Dark, Some(window), cx),
+        _ => Theme::sync_system_appearance(Some(window), cx),
     }
 }
 

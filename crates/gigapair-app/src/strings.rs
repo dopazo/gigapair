@@ -138,6 +138,10 @@ pub const TODAY: &str = "Today";
 pub const YESTERDAY: &str = "Yesterday";
 pub const COMPLETED: &str = "Completed";
 pub const REJECTED_BY_YOU: &str = "Rejected by you";
+pub const SETTINGS_APPEARANCE: &str = "Appearance";
+pub const THEME_SYSTEM: &str = "System";
+pub const THEME_LIGHT: &str = "Light";
+pub const THEME_DARK: &str = "Dark";
 pub const SETTINGS_BEHAVIOUR: &str = "While Gigapair runs";
 pub const SETTINGS_NETWORK: &str = "Network";
 

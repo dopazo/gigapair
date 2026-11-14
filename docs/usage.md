@@ -216,7 +216,7 @@ gigapair config set relay_url https://relay.example.com
 gigapair config set relay_url ""              # back to the public relays
 ```
 
-Settings: `device_name`, `download_dir`, `keep_awake`, `notifications`, `close_to_tray`, `direct_only`, `relay_url`, `discovery`, `upload_limit_kib`, `max_parallel_downloads` and `key_storage`. Some apply after the service restarts.
+Settings: `device_name`, `download_dir`, `keep_awake`, `notifications`, `close_to_tray`, `theme` (`system`, `light` or `dark`), `direct_only`, `relay_url`, `discovery`, `upload_limit_kib`, `max_parallel_downloads` and `key_storage`. Some apply after the service restarts.
 
 **Service and logs:**
 

@@ -21,6 +21,17 @@ pub enum KeyStorage {
     File,
 }
 
+/// Colour scheme of the desktop app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    /// Follow the operating system.
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SeedContact {
     pub name: String,
@@ -43,6 +54,8 @@ pub struct Config {
     /// Closing the app window keeps the app running in the system tray
     /// (RF-14). Only the desktop app reads it.
     pub close_to_tray: bool,
+    /// Colour scheme of the desktop app. Only the desktop app reads it.
+    pub theme: Theme,
     /// Refuse to move data through a relay (fail rather than relay).
     pub direct_only: bool,
     /// Custom relay URL instead of the public n0 relays (RF-18).
@@ -68,6 +81,7 @@ impl Default for Config {
             keep_awake: true,
             notifications: true,
             close_to_tray: true,
+            theme: Theme::System,
             direct_only: false,
             relay_url: None,
             discovery: true,
@@ -114,6 +128,7 @@ pub const KEYS: &[&str] = &[
     "keep_awake",
     "notifications",
     "close_to_tray",
+    "theme",
     "direct_only",
     "relay_url",
     "discovery",
@@ -176,6 +191,14 @@ impl Config {
             "keep_awake" => Some(self.keep_awake.to_string()),
             "notifications" => Some(self.notifications.to_string()),
             "close_to_tray" => Some(self.close_to_tray.to_string()),
+            "theme" => Some(
+                match self.theme {
+                    Theme::System => "system",
+                    Theme::Light => "light",
+                    Theme::Dark => "dark",
+                }
+                .to_owned(),
+            ),
             "direct_only" => Some(self.direct_only.to_string()),
             "relay_url" => self.relay_url.clone(),
             "discovery" => Some(self.discovery.to_string()),
@@ -214,6 +237,14 @@ impl Config {
             "keep_awake" => self.keep_awake = boolean(value)?,
             "notifications" => self.notifications = boolean(value)?,
             "close_to_tray" => self.close_to_tray = boolean(value)?,
+            "theme" => {
+                self.theme = match value.to_ascii_lowercase().as_str() {
+                    "" | "system" => Theme::System,
+                    "light" => Theme::Light,
+                    "dark" => Theme::Dark,
+                    _ => return Err(invalid("use system, light or dark")),
+                }
+            }
             "direct_only" => self.direct_only = boolean(value)?,
             "relay_url" => {
                 if let Some(v) = opt(value) {
@@ -318,6 +349,10 @@ auto_accept = true
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sub/config.toml");
         let mut c = Config::default();
+        assert_eq!(c.get("theme").unwrap().as_deref(), Some("system"));
+        c.set("theme", "dark").unwrap();
+        assert_eq!(c.get("theme").unwrap().as_deref(), Some("dark"));
+        assert!(c.set("theme", "blue").is_err());
         c.set("direct_only", "on").unwrap();
         c.set("upload_limit_kib", "2048").unwrap();
         c.save(&path).unwrap();
