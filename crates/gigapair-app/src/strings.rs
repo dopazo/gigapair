@@ -61,7 +61,17 @@ pub const SAVE: &str = "Save";
 pub const SETTINGS_KEEP_AWAKE: &str = "Keep the computer awake while transfers run";
 pub const SETTINGS_NOTIFICATIONS: &str = "Desktop notifications";
 pub const SETTINGS_START_LOGIN: &str = "Start the Gigapair service at login";
-pub const SETTINGS_DIRECT_ONLY: &str = "Direct connections only (never use a relay)";
+pub const SETTINGS_DIRECT_ONLY: &str =
+    "Direct connections only (file data never goes through a relay)";
+pub const SETTINGS_DIRECT_ONLY_NOTE: &str = "If no direct connection can be made, the transfer waits instead of using a relay. Relays are still used to find your contacts and set up the connection.";
+pub const RELAY_INFO_TITLE: &str = "What is a relay, and is it private?";
+/// Paragraphs of the relay explanation in the settings.
+pub const RELAY_INFO: [&str; 4] = [
+    "A relay is a server that helps two devices find each other and, when they cannot connect directly (for example because of the router or firewall), forwards their traffic between them.",
+    "By default Gigapair uses the public relays run by n0, the makers of iroh. They are shared third-party servers, not run by you or your contact.",
+    "Your files are end-to-end encrypted, so a relay cannot read them. It can see both devices' IP addresses, when you connect and roughly how much data moves. n0 advises against sending sensitive data through public relays.",
+    "For confidential material, turn on \"Direct connections only\" or run your own relay and enter its URL below. With direct only, file contents never go through a relay; small encrypted control messages used to set up the connection still can.",
+];
 pub const SETTINGS_DISCOVERY: &str =
     "Let contacts find this device after network changes (publishes only the relay address)";
 pub const SETTINGS_RELAY: &str = "Custom relay URL (empty: public n0 relays)";
@@ -128,6 +138,10 @@ pub const TODAY: &str = "Today";
 pub const YESTERDAY: &str = "Yesterday";
 pub const COMPLETED: &str = "Completed";
 pub const REJECTED_BY_YOU: &str = "Rejected by you";
+pub const SETTINGS_APPEARANCE: &str = "Appearance";
+pub const THEME_SYSTEM: &str = "System";
+pub const THEME_LIGHT: &str = "Light";
+pub const THEME_DARK: &str = "Dark";
 pub const SETTINGS_BEHAVIOUR: &str = "While Gigapair runs";
 pub const SETTINGS_NETWORK: &str = "Network";
 

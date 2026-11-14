@@ -1,10 +1,12 @@
 //! Endpoint setup, connections and the incoming request dispatcher.
 
+use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use iroh::endpoint::{Connection, RecvStream, SendStream, presets};
+use iroh::endpoint::{Connection, PathEvent, RecvStream, SendStream, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMap, RelayMode, SecretKey, TransportAddr};
+use n0_future::StreamExt;
 
 use super::{EngineError, EngineResult, Inner, NetworkMode, pair, recv, send};
 use crate::config::Config;
@@ -171,6 +173,132 @@ fn learn_from_conn(inner: &Inner, conn: &Connection, remote: EndpointId) {
     }
 }
 
+/// Logs a connection attempt that was dropped before it finished (for
+/// example by the caller's own timeout), which would otherwise leave a
+/// "connecting" line with no outcome.
+struct AttemptGuard {
+    peer: String,
+    started: Instant,
+    done: bool,
+}
+
+impl Drop for AttemptGuard {
+    fn drop(&mut self) {
+        if !self.done {
+            tracing::info!(
+                peer = %self.peer,
+                elapsed_ms = self.started.elapsed().as_millis() as u64,
+                "connection attempt abandoned (no answer in time)"
+            );
+        }
+    }
+}
+
+/// One address as `relay <host>` or `ip <addr>`, for the logs.
+fn describe_addr(a: &TransportAddr) -> String {
+    match a {
+        TransportAddr::Relay(url) => format!("relay {}", url.host_str().unwrap_or("?")),
+        TransportAddr::Ip(ip) => format!("ip {ip}"),
+        other => format!("{other:?}"),
+    }
+}
+
+fn describe_addrs<'a>(addrs: impl Iterator<Item = &'a TransportAddr>) -> String {
+    let list: Vec<String> = addrs.map(describe_addr).collect();
+    if list.is_empty() {
+        "none (relying on discovery)".into()
+    } else {
+        list.join(", ")
+    }
+}
+
+/// The open paths of a connection, the selected one marked with `*`.
+fn describe_paths(conn: &Connection) -> String {
+    let paths = conn.paths();
+    let list: Vec<String> = paths
+        .iter()
+        .map(|p| {
+            format!(
+                "{}{}",
+                if p.is_selected() { "*" } else { "" },
+                describe_addr(p.remote_addr())
+            )
+        })
+        .collect();
+    if list.is_empty() {
+        "none".into()
+    } else {
+        list.join(", ")
+    }
+}
+
+/// Logs every path change of a connection until it closes: when a direct
+/// path opens (hole punching worked), when the selected path switches, and
+/// when paths close. `elapsed_ms` counts from the start of the connection.
+fn watch_paths(conn: &Connection, direction: &'static str) {
+    let conn = conn.clone();
+    let peer = conn.remote_id().fmt_short();
+    tokio::spawn(async move {
+        let started = Instant::now();
+        let mut events = conn.path_events();
+        while let Some(event) = events.next().await {
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match event {
+                PathEvent::Opened {
+                    remote_addr,
+                    local_addr,
+                    ..
+                } => tracing::info!(
+                    %peer, direction, elapsed_ms, local = ?local_addr,
+                    "path opened: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Selected {
+                    remote_addr,
+                    local_addr,
+                    ..
+                } => tracing::info!(
+                    %peer, direction, elapsed_ms, local = ?local_addr,
+                    "path selected: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Closed { remote_addr, .. } => tracing::info!(
+                    %peer, direction, elapsed_ms,
+                    "path closed: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Lagged { missed, .. } => {
+                    tracing::debug!(%peer, direction, missed, "path events dropped")
+                }
+                _ => {}
+            }
+        }
+        tracing::info!(
+            %peer, direction,
+            lifetime_s = started.elapsed().as_secs(),
+            reason = ?conn.close_reason(),
+            "connection closed"
+        );
+    });
+}
+
+/// Whether two sets of addresses suggest devices on the same local
+/// network: the same public IPv4 (same router), or private IPv4 addresses
+/// in the same /24. A heuristic, used only to word a hint.
+pub(super) fn same_network(ours: &[IpAddr], theirs: &[IpAddr]) -> bool {
+    ours.iter().any(|a| {
+        theirs.iter().any(|b| match (a, b) {
+            (IpAddr::V4(a), IpAddr::V4(b)) => {
+                if a.is_loopback() || a.is_link_local() || a.is_unspecified() {
+                    false
+                } else if a.is_private() && b.is_private() {
+                    a.octets()[..3] == b.octets()[..3]
+                } else {
+                    !a.is_private() && !b.is_private() && a == b
+                }
+            }
+            _ => false,
+        })
+    })
+}
+
 /// Which path the connection is using right now.
 pub(super) fn conn_info(conn: &Connection) -> Option<ConnInfo> {
     let paths = conn.paths();
@@ -179,15 +307,34 @@ pub(super) fn conn_info(conn: &Connection) -> Option<ConnInfo> {
         TransportAddr::Relay(url) => ConnInfo {
             kind: ConnKind::Relay,
             relay: url.host_str().map(str::to_owned),
+            same_network: false,
         },
         _ => ConnInfo {
             kind: ConnKind::Direct,
             relay: None,
+            same_network: false,
         },
     })
 }
 
 impl Inner {
+    /// Whether the contact `peer` seems to be on this device's local
+    /// network, going by the addresses of both devices.
+    pub(super) fn peer_on_same_network(&self, peer: &str) -> bool {
+        let Some(theirs) = self
+            .db
+            .contact_addr(peer)
+            .ok()
+            .flatten()
+            .and_then(|j| serde_json::from_str::<EndpointAddr>(&j).ok())
+        else {
+            return false;
+        };
+        let theirs: Vec<IpAddr> = theirs.ip_addrs().map(|a| a.ip()).collect();
+        let ours: Vec<IpAddr> = self.endpoint.addr().ip_addrs().map(|a| a.ip()).collect();
+        same_network(&ours, &theirs)
+    }
+
     /// Returns a cached connection to `peer` or opens a new one.
     pub(super) async fn connect(&self, peer: EndpointId) -> Result<Connection, NetError> {
         {
@@ -211,10 +358,44 @@ impl Inner {
 
     pub(super) async fn connect_addr(&self, addr: EndpointAddr) -> Result<Connection, NetError> {
         let peer = addr.id;
-        let conn = tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN))
-            .await
-            .map_err(|_| NetError::Connect("timed out".into()))?
-            .map_err(|e| NetError::Connect(e.to_string()))?;
+        let candidates = describe_addrs(addr.addrs.iter());
+        tracing::info!(peer = %peer.fmt_short(), %candidates, "connecting");
+        let started = Instant::now();
+        let mut attempt = AttemptGuard {
+            peer: peer.fmt_short().to_string(),
+            started,
+            done: false,
+        };
+        let result = tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN)).await;
+        attempt.done = true;
+        let conn = match result {
+            Ok(Ok(conn)) => conn,
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    peer = %peer.fmt_short(),
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    %candidates,
+                    "connection failed: {e}"
+                );
+                return Err(NetError::Connect(e.to_string()));
+            }
+            Err(_) => {
+                tracing::warn!(
+                    peer = %peer.fmt_short(),
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    %candidates,
+                    "connection timed out"
+                );
+                return Err(NetError::Connect("timed out".into()));
+            }
+        };
+        tracing::info!(
+            peer = %peer.fmt_short(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            paths = %describe_paths(&conn),
+            "connected"
+        );
+        watch_paths(&conn, "outgoing");
         self.conns.lock().await.insert(peer, conn.clone());
         Ok(conn)
     }
@@ -334,13 +515,26 @@ pub(super) async fn accept_loop(inner: Arc<Inner>) {
             let accepting = match incoming.accept() {
                 Ok(a) => a,
                 Err(e) => {
-                    tracing::debug!("incoming connection failed: {e}");
+                    tracing::info!("incoming connection failed: {e}");
                     return;
                 }
             };
+            let started = Instant::now();
             match accepting.await {
-                Ok(conn) => handle_conn(inner, conn).await,
-                Err(e) => tracing::debug!("incoming connection failed: {e}"),
+                Ok(conn) => {
+                    tracing::info!(
+                        peer = %conn.remote_id().fmt_short(),
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                        paths = %describe_paths(&conn),
+                        "accepted connection"
+                    );
+                    watch_paths(&conn, "incoming");
+                    handle_conn(inner, conn).await
+                }
+                Err(e) => tracing::info!(
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    "incoming connection failed: {e}"
+                ),
             }
         });
     }
@@ -490,6 +684,13 @@ pub(super) async fn ping_loop(inner: Arc<Inner>) {
                     Ok(Ok(PeerResponse::Pong { .. }))
                 );
                 let was = inner.is_online(&c.node_id);
+                if ok != was {
+                    tracing::info!(
+                        peer = %id.fmt_short(),
+                        "contact is now {}",
+                        if ok { "online" } else { "offline" }
+                    );
+                }
                 inner.set_online(&c.node_id, ok);
                 if ok && !was {
                     inner.wake_peer(&c.node_id);
@@ -503,5 +704,48 @@ pub(super) async fn ping_loop(inner: Arc<Inner>) {
             _ = inner.shutdown.cancelled() => return,
             _ = tokio::time::sleep(PING_INTERVAL) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ips(list: &[&str]) -> Vec<IpAddr> {
+        list.iter().map(|s| s.parse().unwrap()).collect()
+    }
+
+    #[test]
+    fn same_public_ip_means_same_router() {
+        assert!(same_network(
+            &ips(&["192.168.1.96", "201.246.111.173"]),
+            &ips(&["192.168.1.93", "201.246.111.173"]),
+        ));
+    }
+
+    #[test]
+    fn same_private_subnet_means_same_network() {
+        assert!(same_network(
+            &ips(&["192.168.1.96"]),
+            &ips(&["192.168.1.93"])
+        ));
+    }
+
+    #[test]
+    fn different_networks_are_not_matched() {
+        // Same private range by coincidence, different /24 and public IPs.
+        assert!(!same_network(
+            &ips(&["192.168.1.96", "201.246.111.173"]),
+            &ips(&["192.168.0.12", "190.20.30.40"]),
+        ));
+        // A private address never equals a public one.
+        assert!(!same_network(&ips(&["10.0.0.5"]), &ips(&["8.8.8.8"])));
+        // Loopback and link-local don't count.
+        assert!(!same_network(&ips(&["127.0.0.1"]), &ips(&["127.0.0.1"])));
+        assert!(!same_network(
+            &ips(&["169.254.86.55"]),
+            &ips(&["169.254.86.56"])
+        ));
+        assert!(!same_network(&[], &ips(&["192.168.1.1"])));
     }
 }

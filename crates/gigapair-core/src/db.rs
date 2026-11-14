@@ -616,10 +616,12 @@ fn transfer_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<DbResult<Transfe
         Some("direct") => Some(ConnInfo {
             kind: ConnKind::Direct,
             relay: None,
+            same_network: false,
         }),
         Some("relay") => Some(ConnInfo {
             kind: ConnKind::Relay,
             relay,
+            same_network: false,
         }),
         _ => None,
     };
@@ -731,6 +733,7 @@ mod tests {
             Some(&ConnInfo {
                 kind: ConnKind::Relay,
                 relay: Some("r.example".into()),
+                same_network: false,
             }),
         )
         .unwrap();

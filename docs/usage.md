@@ -16,14 +16,14 @@ Download from the [releases page](https://github.com/dopazo/gigapair/releases), 
 macOS and Linux:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-installer.sh | sh
 ```
 
 Windows (PowerShell): downloads the MSI and installs it with only a progress bar. Windows asks once for administrator rights (the UAC prompt, which you approve). The MSI is the recommended way, from a terminal too, because only the MSI adds the firewall exception:
 
 ```powershell
 $msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
-iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
+iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
 $p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
 if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
 ```
@@ -31,7 +31,7 @@ if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (m
 **Unattended (scripts, servers, AI agents).** Run from a prompt that already has administrator rights: nothing can approve a UAC prompt on your behalf, so a script that asks for one would wait forever. This version shows no window, and its output says what happened, so whoever runs it doesn't need to read the log:
 
 ```powershell
-$v = 'v0.1.0-beta.1'
+$v = 'v0.1.0-beta.2'
 $msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $admin) { 'Gigapair: run this from an administrator prompt (the MSI installs for all users).'; exit 1 }
@@ -64,7 +64,7 @@ The shell installer puts the programs in your user folder, `~/.cargo/bin`, and a
 **Windows without administrator rights.** If you can't install the MSI, a PowerShell installer installs for your user only, in `%USERPROFILE%\.cargo\bin`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-installer.ps1 | iex"
 ```
 
 It adds no Start menu entry (start the app with `gigapair-app`) and no firewall exception: Windows asks the first time the service runs, and allowing it needs an administrator. Without the exception, contacts can't open a connection to this computer directly, so more transfers go through a relay and may be slower. Prefer the MSI.
@@ -211,12 +211,12 @@ gigapair contacts remove "Edit Suite"
 gigapair config get
 gigapair config set download_dir D:\Incoming
 gigapair config set upload_limit_kib 20000    # about 20 MB/s; 0 is unlimited
-gigapair config set direct_only true          # never use a relay
+gigapair config set direct_only true          # file data never goes through a relay (setup still does)
 gigapair config set relay_url https://relay.example.com
 gigapair config set relay_url ""              # back to the public relays
 ```
 
-Settings: `device_name`, `download_dir`, `keep_awake`, `notifications`, `close_to_tray`, `direct_only`, `relay_url`, `discovery`, `upload_limit_kib`, `max_parallel_downloads` and `key_storage`. Some apply after the service restarts.
+Settings: `device_name`, `download_dir`, `keep_awake`, `notifications`, `close_to_tray`, `theme` (`system`, `light` or `dark`), `direct_only`, `relay_url`, `discovery`, `upload_limit_kib`, `max_parallel_downloads` and `key_storage`. Some apply after the service restarts.
 
 **Service and logs:**
 
@@ -243,7 +243,7 @@ A machine that only receives (a home server, a NAS, a render node) needs only th
 **1. Install** with the shell installer (Linux, macOS) or the unattended MSI script (Windows), as in [From a terminal](#from-a-terminal):
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-installer.sh | sh
 ```
 
 **2. Start the service at boot:**
@@ -296,6 +296,7 @@ The service uses each platform's native mechanism:
 | Linux builds are x86_64 with glibc 2.35+ only | No ARM (Raspberry Pi, most NAS), no musl (Alpine), no older distributions such as RHEL 8 |
 | The service runs as a user, not as a system account | Run it as a dedicated user (for example `gigapair`) if the machine is shared |
 | Windows without the MSI (PowerShell installer): no firewall exception | More transfers go through a relay; install the MSI instead |
+| Two devices on the same router but on different Wi-Fi networks (or Wi-Fi and cable) that the router keeps apart | The transfer goes through a relay; connect both to the same network |
 
 A Windows Service, a Linux system unit with a dedicated user and settings in `/etc/gigapair`, and ARM Linux builds are planned.
 

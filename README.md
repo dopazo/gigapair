@@ -47,11 +47,11 @@ Or install from a terminal, which also suits servers:
 
 ```sh
 # macOS and Linux
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-installer.sh | sh
 
 # Windows (PowerShell): downloads the MSI and installs it with a progress bar
 $msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
-iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.1/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
+iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.2/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
 $p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
 if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
 ```

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use gigapair_core::api::{Event, RELAY_NOTICE, Request, Response, StatusInfo};
+use gigapair_core::api::{Event, RELAY_NOTICE, Request, Response, StatusInfo, same_network_hint};
 use gigapair_core::dirs::AppDirs;
 use gigapair_core::types::{
     ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
@@ -18,7 +18,9 @@ use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
-use gpui_kit::component::{ActiveTheme, Disableable, Sizable, Theme, WindowExt, h_flex, v_flex};
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Sizable, Theme, ThemeMode, WindowExt, h_flex, v_flex,
+};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, AppContext, ClipboardItem, Context, Div, Entity, ExternalPaths, FontFeatures,
@@ -53,6 +55,8 @@ pub struct GigapairApp {
     page: Page,
     pair_code: Option<(String, i64)>,
     relay_banner: Option<String>,
+    /// The "What is a relay?" panel in the settings is open.
+    relay_info_open: bool,
     remove_armed: bool,
     /// The contact page shows the rename field.
     renaming: bool,
@@ -84,8 +88,11 @@ impl GigapairApp {
         })
         .detach();
 
-        cx.observe_window_appearance(window, |_, window, cx| {
-            Theme::sync_system_appearance(Some(window), cx);
+        cx.observe_window_appearance(window, |app, window, cx| {
+            // Only a "system" choice follows the operating system.
+            if !matches!(app.config_str("theme").as_str(), "light" | "dark") {
+                Theme::sync_system_appearance(Some(window), cx);
+            }
         })
         .detach();
 
@@ -106,6 +113,7 @@ impl GigapairApp {
             page: Page::AddContact,
             pair_code: None,
             relay_banner: None,
+            relay_info_open: false,
             remove_armed: false,
             renaming: false,
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
@@ -236,6 +244,7 @@ impl GigapairApp {
                     app.config = entries.into_iter().map(|e| (e.key, e.value)).collect();
                     let close_to_tray = app.config_bool("close_to_tray");
                     shell::set_close_to_tray(close_to_tray, cx);
+                    apply_theme(&app.config_str("theme"), window, cx);
                     let relay = app.config_str("relay_url");
                     let limit = app.config_str("upload_limit_kib");
                     app.relay_input
@@ -820,6 +829,17 @@ impl GigapairApp {
                             .text_color(p.ink_3)
                             .child(div().flex_shrink_0().child(s::files(t.file_count)))
                             .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
+                    )
+                    .children(
+                        t.conn
+                            .as_ref()
+                            .filter(|c| c.kind == ConnKind::Relay && c.same_network)
+                            .map(|_| {
+                                div()
+                                    .text_size(px(12.))
+                                    .text_color(p.ink_2)
+                                    .child(same_network_hint(&t.peer_name))
+                            }),
                     ),
             )
             .child(
@@ -1664,6 +1684,27 @@ impl GigapairApp {
                             })),
                     ),
             )
+            .child(label(s::SETTINGS_APPEARANCE))
+            .child(
+                h_flex().gap(px(6.)).children(
+                    [
+                        ("theme-system", s::THEME_SYSTEM, "system"),
+                        ("theme-light", s::THEME_LIGHT, "light"),
+                        ("theme-dark", s::THEME_DARK, "dark"),
+                    ]
+                    .map(|(id, text, value)| {
+                        let current = self.config_str("theme");
+                        let selected =
+                            current == value || (value == "system" && current.is_empty());
+                        Button::new(id)
+                            .label(text)
+                            .when(selected, |b| b.primary())
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                app.set_config("theme", value.to_owned(), window, cx)
+                            }))
+                    }),
+                ),
+            )
             .child(label(s::SETTINGS_BEHAVIOUR))
             .child(switch(
                 "sw-awake",
@@ -1706,6 +1747,36 @@ impl GigapairApp {
                 self,
                 cx,
             ))
+            .child(note(s::SETTINGS_DIRECT_ONLY_NOTE))
+            .child(
+                h_flex()
+                    .id("relay-info-toggle")
+                    .gap(px(6.))
+                    .cursor_pointer()
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(p.ink_2)
+                    .child(if self.relay_info_open { "▾" } else { "▸" })
+                    .child(s::RELAY_INFO_TITLE)
+                    .on_click(cx.listener(|app, _, _, cx| {
+                        app.relay_info_open = !app.relay_info_open;
+                        cx.notify();
+                    })),
+            )
+            .when(self.relay_info_open, |el| {
+                el.child(
+                    v_flex()
+                        .gap(px(6.))
+                        .p(px(10.))
+                        .rounded(px(8.))
+                        .bg(p.surface)
+                        .border_1()
+                        .border_color(p.line)
+                        .text_size(px(12.))
+                        .text_color(p.ink_2)
+                        .children(s::RELAY_INFO.iter().map(|para| div().child(*para))),
+                )
+            })
             .child(switch(
                 "sw-discovery",
                 s::SETTINGS_DISCOVERY,
@@ -1849,6 +1920,16 @@ impl Render for GigapairApp {
             .text_size(px(13.))
             .child(self.render_sidebar(cx))
             .child(main)
+    }
+}
+
+/// Applies the `theme` setting: `light` or `dark` force that scheme,
+/// anything else follows the operating system.
+fn apply_theme(choice: &str, window: &mut Window, cx: &mut gpui_kit::App) {
+    match choice {
+        "light" => Theme::change(ThemeMode::Light, Some(window), cx),
+        "dark" => Theme::change(ThemeMode::Dark, Some(window), cx),
+        _ => Theme::sync_system_appearance(Some(window), cx),
     }
 }
 

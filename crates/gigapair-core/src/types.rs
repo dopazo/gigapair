@@ -128,6 +128,11 @@ pub struct ConnInfo {
     pub kind: ConnKind,
     /// Relay host when `kind` is `Relay`.
     pub relay: Option<String>,
+    /// Only meaningful for a relayed connection: the other device looks to
+    /// be on the same local network (same public IP or same private
+    /// subnet), so a direct connection was expected. Not persisted.
+    #[serde(default)]
+    pub same_network: bool,
 }
 
 impl ConnInfo {

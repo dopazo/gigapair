@@ -391,7 +391,7 @@ impl Inner {
     /// transfer that already ended (see [`Db::set_status`]).
     pub fn set_status(&self, id: &str, status: TransferStatus) {
         match self.db.set_status(id, status) {
-            Ok(true) => {}
+            Ok(true) => tracing::info!(transfer = id, ?status, "transfer status changed"),
             Ok(false) => {
                 tracing::debug!(
                     transfer = id,
@@ -440,7 +440,17 @@ impl Inner {
         self.emit_transfer(id);
     }
 
-    pub fn set_conn(&self, id: &str, conn: Option<ConnInfo>) {
+    pub fn set_conn(&self, id: &str, mut conn: Option<ConnInfo>) {
+        if let Some(c) = conn.as_mut()
+            && c.kind == crate::types::ConnKind::Relay
+        {
+            c.same_network = self
+                .db
+                .transfer(id)
+                .ok()
+                .flatten()
+                .is_some_and(|r| self.peer_on_same_network(&r.peer));
+        }
         let changed = {
             let mut live = self.live();
             let l = live.entry(id.to_owned()).or_default();
@@ -449,6 +459,16 @@ impl Inner {
             changed
         };
         if changed {
+            match &conn {
+                Some(c) => tracing::info!(
+                    transfer = id,
+                    kind = ?c.kind,
+                    relay = c.relay.as_deref().unwrap_or("-"),
+                    same_network = c.same_network,
+                    "transfer connection path changed"
+                ),
+                None => tracing::info!(transfer = id, "transfer has no connection path"),
+            }
             let _ = self.db.set_conn(id, conn.as_ref());
             if let Some(c) = &conn
                 && c.kind == crate::types::ConnKind::Relay
