@@ -27,6 +27,7 @@ data-encoding = "2.11"
 rand = "0.10"
 filetime = "0.2"
 tokio-util = "0.7"
+n0-future = "0.3"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -391,7 +391,7 @@ impl Inner {
     /// transfer that already ended (see [`Db::set_status`]).
     pub fn set_status(&self, id: &str, status: TransferStatus) {
         match self.db.set_status(id, status) {
-            Ok(true) => {}
+            Ok(true) => tracing::info!(transfer = id, ?status, "transfer status changed"),
             Ok(false) => {
                 tracing::debug!(
                     transfer = id,
@@ -449,6 +449,15 @@ impl Inner {
             changed
         };
         if changed {
+            match &conn {
+                Some(c) => tracing::info!(
+                    transfer = id,
+                    kind = ?c.kind,
+                    relay = c.relay.as_deref().unwrap_or("-"),
+                    "transfer connection path changed"
+                ),
+                None => tracing::info!(transfer = id, "transfer has no connection path"),
+            }
             let _ = self.db.set_conn(id, conn.as_ref());
             if let Some(c) = &conn
                 && c.kind == crate::types::ConnKind::Relay

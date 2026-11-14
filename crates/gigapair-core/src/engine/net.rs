@@ -1,10 +1,11 @@
 //! Endpoint setup, connections and the incoming request dispatcher.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use iroh::endpoint::{Connection, RecvStream, SendStream, presets};
+use iroh::endpoint::{Connection, PathEvent, RecvStream, SendStream, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMap, RelayMode, SecretKey, TransportAddr};
+use n0_future::StreamExt;
 
 use super::{EngineError, EngineResult, Inner, NetworkMode, pair, recv, send};
 use crate::config::Config;
@@ -171,6 +172,91 @@ fn learn_from_conn(inner: &Inner, conn: &Connection, remote: EndpointId) {
     }
 }
 
+/// One address as `relay <host>` or `ip <addr>`, for the logs.
+fn describe_addr(a: &TransportAddr) -> String {
+    match a {
+        TransportAddr::Relay(url) => format!("relay {}", url.host_str().unwrap_or("?")),
+        TransportAddr::Ip(ip) => format!("ip {ip}"),
+        other => format!("{other:?}"),
+    }
+}
+
+fn describe_addrs<'a>(addrs: impl Iterator<Item = &'a TransportAddr>) -> String {
+    let list: Vec<String> = addrs.map(describe_addr).collect();
+    if list.is_empty() {
+        "none (relying on discovery)".into()
+    } else {
+        list.join(", ")
+    }
+}
+
+/// The open paths of a connection, the selected one marked with `*`.
+fn describe_paths(conn: &Connection) -> String {
+    let paths = conn.paths();
+    let list: Vec<String> = paths
+        .iter()
+        .map(|p| {
+            format!(
+                "{}{}",
+                if p.is_selected() { "*" } else { "" },
+                describe_addr(p.remote_addr())
+            )
+        })
+        .collect();
+    if list.is_empty() {
+        "none".into()
+    } else {
+        list.join(", ")
+    }
+}
+
+/// Logs every path change of a connection until it closes: when a direct
+/// path opens (hole punching worked), when the selected path switches, and
+/// when paths close. `elapsed_ms` counts from the start of the connection.
+fn watch_paths(conn: &Connection, direction: &'static str) {
+    let conn = conn.clone();
+    let peer = conn.remote_id().fmt_short();
+    tokio::spawn(async move {
+        let started = Instant::now();
+        let mut events = conn.path_events();
+        while let Some(event) = events.next().await {
+            let elapsed_ms = started.elapsed().as_millis() as u64;
+            match event {
+                PathEvent::Opened {
+                    remote_addr,
+                    local_addr,
+                    ..
+                } => tracing::info!(
+                    %peer, direction, elapsed_ms, local = ?local_addr,
+                    "path opened: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Selected {
+                    remote_addr,
+                    local_addr,
+                    ..
+                } => tracing::info!(
+                    %peer, direction, elapsed_ms, local = ?local_addr,
+                    "path selected: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Closed { remote_addr, .. } => tracing::info!(
+                    %peer, direction, elapsed_ms,
+                    "path closed: {}", describe_addr(&remote_addr)
+                ),
+                PathEvent::Lagged { missed, .. } => {
+                    tracing::debug!(%peer, direction, missed, "path events dropped")
+                }
+                _ => {}
+            }
+        }
+        tracing::info!(
+            %peer, direction,
+            lifetime_s = started.elapsed().as_secs(),
+            reason = ?conn.close_reason(),
+            "connection closed"
+        );
+    });
+}
+
 /// Which path the connection is using right now.
 pub(super) fn conn_info(conn: &Connection) -> Option<ConnInfo> {
     let paths = conn.paths();
@@ -211,10 +297,38 @@ impl Inner {
 
     pub(super) async fn connect_addr(&self, addr: EndpointAddr) -> Result<Connection, NetError> {
         let peer = addr.id;
-        let conn = tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN))
-            .await
-            .map_err(|_| NetError::Connect("timed out".into()))?
-            .map_err(|e| NetError::Connect(e.to_string()))?;
+        let candidates = describe_addrs(addr.addrs.iter());
+        tracing::info!(peer = %peer.fmt_short(), %candidates, "connecting");
+        let started = Instant::now();
+        let conn =
+            match tokio::time::timeout(CONNECT_TIMEOUT, self.endpoint.connect(addr, ALPN)).await {
+                Ok(Ok(conn)) => conn,
+                Ok(Err(e)) => {
+                    tracing::warn!(
+                        peer = %peer.fmt_short(),
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                        %candidates,
+                        "connection failed: {e}"
+                    );
+                    return Err(NetError::Connect(e.to_string()));
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        peer = %peer.fmt_short(),
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                        %candidates,
+                        "connection timed out"
+                    );
+                    return Err(NetError::Connect("timed out".into()));
+                }
+            };
+        tracing::info!(
+            peer = %peer.fmt_short(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            paths = %describe_paths(&conn),
+            "connected"
+        );
+        watch_paths(&conn, "outgoing");
         self.conns.lock().await.insert(peer, conn.clone());
         Ok(conn)
     }
@@ -334,13 +448,26 @@ pub(super) async fn accept_loop(inner: Arc<Inner>) {
             let accepting = match incoming.accept() {
                 Ok(a) => a,
                 Err(e) => {
-                    tracing::debug!("incoming connection failed: {e}");
+                    tracing::info!("incoming connection failed: {e}");
                     return;
                 }
             };
+            let started = Instant::now();
             match accepting.await {
-                Ok(conn) => handle_conn(inner, conn).await,
-                Err(e) => tracing::debug!("incoming connection failed: {e}"),
+                Ok(conn) => {
+                    tracing::info!(
+                        peer = %conn.remote_id().fmt_short(),
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                        paths = %describe_paths(&conn),
+                        "accepted connection"
+                    );
+                    watch_paths(&conn, "incoming");
+                    handle_conn(inner, conn).await
+                }
+                Err(e) => tracing::info!(
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    "incoming connection failed: {e}"
+                ),
             }
         });
     }

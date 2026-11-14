@@ -2504,6 +2504,7 @@ dependencies = [
  "iroh",
  "keyring",
  "libc",
+ "n0-future",
  "rand 0.10.3",
  "rusqlite",
  "serde",
