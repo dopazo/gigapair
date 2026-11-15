@@ -1,0 +1,53 @@
+# Custom dist job: wraps the macOS archives into Gigapair.app inside a DMG.
+# Called from release.yml after the local artifacts are built (see
+# `build-global-artifacts-jobs` in dist-workspace.toml).
+name: Build DMG
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  dmg:
+    name: dmg (${{ matrix.target }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Fetch the built archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: artifacts-build-local-*
+          path: dist-in/
+          merge-multiple: true
+      - name: Build the DMG
+        shell: bash
+        env:
+          PLAN: ${{ inputs.plan }}
+        run: |
+          version=$(echo "$PLAN" | jq -r '.announcement_tag' | sed 's/^v//')
+          archive="dist-in/gigapair-${{ matrix.target }}.tar.xz"
+          dmg="dist-out/gigapair-${{ matrix.target }}.dmg"
+          scripts/macos-bundle.sh "$archive" "$version" "$dmg"
+          (cd dist-out && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
+      - name: Attest
+        uses: actions/attest@v4
+        with:
+          subject-path: "dist-out/*.dmg"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-dmg-${{ matrix.target }}
+          path: dist-out/*

@@ -23,8 +23,12 @@ github-attestations = true
 # Which actions to run on pull requests
 pr-run-mode = "plan"
 # main.wxs is edited by hand (Start menu shortcut for the app): don't
-# regenerate it.
-allow-dirty = ["msi"]
+# regenerate it. release.yml is edited by hand too: dist 0.34 writes an invalid
+# `uses:` for the custom DMG job on Windows, and the job needs an `if` to skip
+# pull requests. After `dist generate`, re-apply the notes in the workflow.
+allow-dirty = ["msi", "ci"]
+# Wraps the macOS archives into Gigapair.app in a DMG (.github/workflows/build-dmg.yml).
+global-artifacts-jobs = ["./build-dmg"]
 
 # GPUI needs these to build on Linux.
 [dist.dependencies.apt]
