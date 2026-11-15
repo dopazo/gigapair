@@ -7,7 +7,7 @@ Download from the [releases page](https://github.com/dopazo/gigapair/releases), 
 | Platform | How |
 | --- | --- |
 | Windows | `gigapair-x86_64-pc-windows-msvc.msi`: installs to Program Files for all users, adds a **Gigapair** entry to the Start menu, puts the CLI on the `PATH` and adds a firewall exception for the service. Asks for administrator rights |
-| macOS (Apple silicon and Intel) | The shell installer below, then run `gigapair-app` |
+| macOS 11+ (Apple silicon and Intel) | `gigapair-aarch64-apple-darwin.dmg` (Apple silicon) or `gigapair-x86_64-apple-darwin.dmg` (Intel): open it and drag **Gigapair** to Applications. The first launch needs one confirmation (see below). The CLI is inside the app; the shell installer below also works |
 | Linux (x86_64, glibc 2.35+) | The shell installer below, then run `gigapair-app` |
 | Any | The `.zip`/`.tar.xz` archives: unpack and keep the four programs in the same folder |
 
@@ -69,7 +69,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/dopazo/gigapair/re
 
 It adds no Start menu entry (start the app with `gigapair-app`) and no firewall exception: Windows asks the first time the service runs, and allowing it needs an administrator. Without the exception, contacts can't open a connection to this computer directly, so more transfers go through a relay and may be slower. Prefer the MSI.
 
-Not available yet: a macOS `.app` bundle (DMG), AppImage, `.deb`, winget, Scoop, Homebrew and `cargo install`. They are planned for later releases.
+Not available yet: AppImage, `.deb`, winget, Scoop, Homebrew and `cargo install`. They are planned for later releases.
 
 Every release includes SHA-256 checksums (`sha256.sum` and one `.sha256` per file) and [GitHub build attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). To verify a download:
 
@@ -79,12 +79,21 @@ gh attestation verify <downloaded-file> --repo dopazo/gigapair
 
 On Linux the desktop app needs the usual desktop libraries (Vulkan driver, `libxkbcommon`, `fontconfig`), present on any desktop install.
 
+### macOS app and command line
+
+The DMG holds `Gigapair.app`, which contains the four programs. To use the CLI from a terminal, link it once:
+
+```sh
+sudo ln -s /Applications/Gigapair.app/Contents/MacOS/gigapair /usr/local/bin/gigapair
+sudo ln -s /Applications/Gigapair.app/Contents/MacOS/gpair /usr/local/bin/gpair
+```
+
 ### Unsigned binaries
 
 v1 binaries are not code-signed, so your operating system will warn you the first time you run them:
 
 - **Windows (SmartScreen):** click **More info**, then **Run anyway**.
-- **macOS (Gatekeeper):** open **System Settings → Privacy & Security** and click **Open Anyway**.
+- **macOS (Gatekeeper):** the DMG and the app are not notarized, so the first launch is blocked. Open **Gigapair** once, then go to **System Settings → Privacy & Security**, scroll down to the message about Gigapair and click **Open Anyway**; or run `xattr -dr com.apple.quarantine /Applications/Gigapair.app`. It is asked only once.
 - **Linux:** no signing warning.
 
 The shell and PowerShell installers download with `curl`/`irm`, which don't mark files as downloaded from the internet, so they usually avoid these warnings.
