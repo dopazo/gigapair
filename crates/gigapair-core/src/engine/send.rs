@@ -315,6 +315,12 @@ async fn offer_loop(inner: &Arc<Inner>, id: &str, token: &CancellationToken) {
                     }
                 }
             },
+            // The other device speaks another protocol version: retrying
+            // can't help, so say so now rather than wait forever.
+            Err(e @ NetError::Wire(crate::wire::WireError::Incompatible { .. })) => {
+                inner.fail(id, &e.to_string());
+                return;
+            }
             Err(e) => {
                 tracing::debug!(transfer = id, "offer not delivered: {e}");
                 inner.set_note(id, Some(format!("Waiting for {name} to come online")));
