@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use gigapair_core::api::{Event, IPC_VERSION, Request, Response};
+use gigapair_core::api::{Event, IPC_VERSION, Request, Response, unknown_request};
 use gigapair_core::config::Config;
 use gigapair_core::dirs::AppDirs;
 use gigapair_core::engine::{Engine, EngineOptions, NetworkMode};
@@ -197,7 +197,23 @@ async fn serve_client(
         }
     }
 
-    while let Some(req) = conn.recv::<Request>().await? {
+    loop {
+        let req = match conn.recv::<Request>().await {
+            Ok(Some(req)) => req,
+            Ok(None) => break,
+            // A request this version doesn't know, sent by a newer app or
+            // CLI: answer it, rather than dropping the connection and
+            // leaving the client with "the service closed the connection".
+            Err(ipc::IpcError::Json(e)) => {
+                tracing::warn!("unreadable request (a newer client?): {e}");
+                conn.send(&Response::Error {
+                    message: unknown_request(env!("CARGO_PKG_VERSION")),
+                })
+                .await?;
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         match req {
             Request::Subscribe => {
                 // Subscribe before acknowledging so no event is missed.

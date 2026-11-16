@@ -198,6 +198,17 @@ could not be made. The relay only forwards end-to-end encrypted data and cannot 
 but it can see both devices' IP addresses, when you transfer and how much. You can turn on \
 \"direct only\" or use your own relay in the settings.";
 
+/// The service's answer to a request it can't read: one added after its
+/// version, from a newer app or CLI. Normally an older service is restarted
+/// before that can happen ([`crate::ipc::connect_or_spawn`]), but not when
+/// both report the same version (a development build next to an installed
+/// one).
+pub fn unknown_request(service_version: &str) -> String {
+    format!(
+        "the running Gigapair service ({service_version}) doesn't support this; it is older than the program that asked. Restart it so the newer version runs: `gigapair service stop`, then open Gigapair again (or `gigapair service start`)"
+    )
+}
+
 /// Shown next to a relayed transfer when the other device looks to be on
 /// the same local network.
 pub fn same_network_hint(name: &str) -> String {
