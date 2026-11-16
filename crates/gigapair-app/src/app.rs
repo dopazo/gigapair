@@ -16,6 +16,7 @@ use gigapair_core::types::{
 use gpui_kit::base::{SelectableText, TextSelection};
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
@@ -1748,7 +1749,7 @@ impl GigapairApp {
             .child(
                 h_flex()
                     .gap(px(6.))
-                    .child(div().flex_1().min_w_0().truncate().child(download))
+                    .child(div().flex_1().min_w_0().truncate().child(text(download)))
                     .child(Button::new("change-download").label(s::CHANGE).on_click(
                         cx.listener(|app, _, window, cx| app.choose_download_dir(window, cx)),
                     )),
@@ -2024,7 +2025,40 @@ impl Render for GigapairApp {
             .text_size(px(13.))
             .child(self.render_sidebar(cx))
             .child(main)
+            // Right click: Copy, for the text selected when the menu opens
+            // (the click on the item itself clears the selection).
+            .context_menu(|menu, window, cx| {
+                let selected = TextSelection::selected_text(window, cx).trim().to_owned();
+                let item = PopupMenuItem::new(s::COPY).disabled(selected.is_empty());
+                menu.item(item.on_click(move |_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(selected.clone()));
+                }))
+            })
     }
+}
+
+/// Ctrl+C (Cmd+C on macOS) copies the text selected in the window,
+/// whichever element has the keyboard focus. gpui-base binds the shortcut
+/// on its root, but a focused input earlier in the dispatch path takes the
+/// copy itself (even with nothing selected in it), so the root never saw
+/// it. Intercepting runs before any of that; with no window selection the
+/// keystroke goes on as usual, so copying inside an input still works.
+pub fn install_copy_shortcut(cx: &mut gpui_kit::App) {
+    cx.intercept_keystrokes(|event, window, cx| {
+        let k = &event.keystroke;
+        let m = &k.modifiers;
+        if k.key != "c" || !m.secondary(cx) || m.shift || m.alt {
+            return;
+        }
+        let selected = TextSelection::selected_text(window, cx);
+        let selected = selected.trim();
+        if selected.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(selected.to_owned()));
+        cx.stop_propagation();
+    })
+    .detach();
 }
 
 /// Applies the `theme` setting: `light` or `dark` force that scheme,

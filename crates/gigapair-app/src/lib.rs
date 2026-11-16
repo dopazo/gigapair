@@ -60,6 +60,7 @@ pub fn main() {
     app.run(move |cx: &mut App| {
         gpui_kit::init(cx);
         style::install(cx);
+        app::install_copy_shortcut(cx);
         shell::start(dirs, primary, background, cx);
     });
     tracing::info!("Gigapair app closed");
