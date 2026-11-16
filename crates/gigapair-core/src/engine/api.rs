@@ -40,11 +40,12 @@ impl super::Engine {
         self.inner.contacts()
     }
 
-    /// Before this device's data is deleted: cancels every transfer and
-    /// asks each contact to forget this device, waiting a few seconds at
-    /// most, so contacts don't keep one that will never answer again. Then
-    /// tells clients ([`Event::Reset`]) not to start the service again.
-    pub async fn forget_all(&self) {
+    /// Before this device's data is deleted: stops every transfer and
+    /// removes partial downloads, then tells clients ([`Event::Reset`]) not
+    /// to start the service again. Contacts are not told anything: to them
+    /// this device just stops answering, like one that is switched off, so
+    /// they don't learn that Gigapair was reset or uninstalled here.
+    pub async fn prepare_reset(&self) {
         let inner = &self.inner;
         for row in inner.db.active_transfers().unwrap_or_default() {
             inner.stop_task(&row.id);
@@ -57,24 +58,6 @@ impl super::Engine {
                 recv::cleanup_partial(&row);
             }
         }
-        let mut unpairs = tokio::task::JoinSet::new();
-        for c in inner.contacts().unwrap_or_default() {
-            let Ok(peer) = c.node_id.parse::<iroh::EndpointId>() else {
-                continue;
-            };
-            let inner = inner.clone();
-            unpairs.spawn(async move {
-                let sent = tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    inner.request(peer, &PeerRequest::Unpair),
-                )
-                .await;
-                if !matches!(sent, Ok(Ok(_))) {
-                    tracing::info!(peer = %peer.fmt_short(), "could not tell a contact to forget this device");
-                }
-            });
-        }
-        while unpairs.join_next().await.is_some() {}
         inner.emit(Event::Reset);
     }
 }

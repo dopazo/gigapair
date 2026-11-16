@@ -211,8 +211,8 @@ async fn serve_client(
                 return Ok(());
             }
             Request::Reset => {
-                tracing::info!("deleting this device's data: forgetting contacts and stopping");
-                engine.forget_all().await;
+                tracing::info!("deleting this device's data: stopping transfers and the service");
+                engine.prepare_reset().await;
                 conn.send(&Response::Ok).await?;
                 stop.notify_one();
                 return Ok(());

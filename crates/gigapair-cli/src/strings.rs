@@ -121,7 +121,7 @@ pub fn service_status(installed: bool, location: Option<&str>, running: bool) ->
 
 pub fn reset_intro(downloads: &str) -> String {
     format!(
-        "This deletes everything Gigapair keeps on this device: your contacts, this device's identity, the transfer history and queue, the settings and the logs. Transfers in progress are cancelled, your contacts are told to forget this device, and Gigapair stops starting at login.
+        "This deletes everything Gigapair keeps on this device: your contacts, this device's identity, the transfer history and queue, the settings and the logs. Transfers in progress are cancelled and Gigapair stops starting at login. Your contacts aren't told anything: to them this device just appears offline.
 Received files are kept (by default in {downloads}).
 To use Gigapair again afterwards, every contact must pair again."
     )

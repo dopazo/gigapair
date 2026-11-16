@@ -328,7 +328,7 @@ If no keyring is available (headless servers), the key is stored in a file with 
 Uninstalling Gigapair keeps all of the above, so reinstalling or updating (which uninstalls the old version) keeps your contacts. To delete it, use **Settings → Delete this device's data** in the app, or `gigapair reset`, before uninstalling:
 
 - It deletes your contacts, this device's identity (the node key, from the keyring too), the transfer history and queue, the settings and the logs, and removes the start at login.
-- Transfers in progress are cancelled, and each contact that can be reached is told to forget this device.
+- Transfers in progress are cancelled. Contacts aren't told anything: to them this device just appears offline, so they don't learn that you reset or uninstalled Gigapair. They can remove it from their own list.
 - Received files are never deleted.
 - The app closes when it's done. Using Gigapair again afterwards means pairing every contact again.
 

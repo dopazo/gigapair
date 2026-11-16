@@ -100,9 +100,9 @@ pub enum Request {
     Subscribe,
     /// Stops the service.
     Shutdown,
-    /// Before deleting this device's data: cancels every transfer, asks
-    /// each contact to forget this device, tells clients ([`Event::Reset`])
-    /// and stops the service. The client then deletes the data
+    /// Before deleting this device's data: stops every transfer, tells
+    /// clients ([`Event::Reset`]) and stops the service. Contacts are not
+    /// told: to them this device just goes offline. The client then deletes the data
     /// ([`crate::reset::wipe`]) once the service has exited.
     Reset,
 }
