@@ -12,7 +12,8 @@ use super::{EngineError, EngineResult, Inner, NetworkMode, pair, recv, send};
 use crate::config::Config;
 use crate::types::{ConnInfo, ConnKind};
 use crate::wire::{
-    ALPN, ErrorCode, PROTOCOL_VERSION, PeerRequest, PeerResponse, WireError, read_msg, write_msg,
+    ALPN, ErrorCode, MAX_MESSAGE, MAX_STRANGER_MESSAGE, PROTOCOL_VERSION, PeerRequest,
+    PeerResponse, WireError, read_msg, read_msg_max, write_msg,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -573,7 +574,21 @@ async fn handle_stream(
     mut send: SendStream,
     mut recv: RecvStream,
 ) -> Result<(), NetError> {
-    let env = match read_msg::<_, PeerRequest>(&mut recv).await {
+    // Anyone who knows this node id can connect. Until the sender is known
+    // to be a contact, accept only small messages, and don't let a stalled
+    // stream hold its buffer.
+    let max = if inner.is_contact(&remote) {
+        MAX_MESSAGE
+    } else {
+        MAX_STRANGER_MESSAGE
+    };
+    let read = tokio::time::timeout(
+        ANSWER_TIMEOUT,
+        read_msg_max::<_, PeerRequest>(&mut recv, max),
+    )
+    .await
+    .map_err(|_| NetError::Connect("the request did not arrive in time".into()))?;
+    let env = match read {
         Ok(env) => env,
         Err(WireError::Incompatible { .. }) => {
             return reply(
