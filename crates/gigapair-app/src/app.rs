@@ -1174,7 +1174,7 @@ impl GigapairApp {
                     .flex_1()
                     .min_w_0()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(s::drop_hint(&c.name)),
+                    .child(selectable("drop-hint", s::drop_hint(&c.name))),
             )
             .child(
                 h_flex()
@@ -2034,7 +2034,7 @@ fn page_head(
                         .line_height(px(22.))
                         .text_color(p.ink)
                         .truncate()
-                        .child(title.to_owned()),
+                        .child(selectable("page-title", title.to_owned())),
                 )
                 .children(meta),
         )
