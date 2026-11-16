@@ -13,6 +13,7 @@ use gigapair_core::types::{
     ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
     format_bytes, format_duration, now_secs,
 };
+use gigapair_core::update::UpdateInfo;
 use gpui_kit::base::{SelectableText, TextSelection};
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
@@ -69,6 +70,8 @@ pub struct GigapairApp {
     start_at_login: Option<bool>,
     /// Where the service and the app write their log files.
     logs_dir: Option<PathBuf>,
+    /// Settings → Check for updates.
+    update: UpdateCheck,
     code_input: Entity<InputState>,
     pair_name_inputs: HashMap<String, Entity<InputState>>,
     rename_input: Entity<InputState>,
@@ -78,6 +81,15 @@ pub struct GigapairApp {
 }
 
 type Done = Box<dyn FnOnce(&mut GigapairApp, Response, &mut Window, &mut Context<GigapairApp>)>;
+
+/// Where "Check for updates" stands. Only checked when clicked.
+enum UpdateCheck {
+    NotYet,
+    Checking,
+    Done(UpdateInfo),
+    /// A message ready to show.
+    Failed(String),
+}
 
 impl GigapairApp {
     /// Service messages arrive through [`Self::on_backend`], called by the
@@ -126,6 +138,7 @@ impl GigapairApp {
             renaming: false,
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
             logs_dir: AppDirs::from_env().ok().map(|d| d.logs),
+            update: UpdateCheck::NotYet,
             code_input: input(s::CODE_PLACEHOLDER, window, cx),
             pair_name_inputs: HashMap::new(),
             rename_input: input(s::NAME_PLACEHOLDER, window, cx),
@@ -153,6 +166,31 @@ impl GigapairApp {
             let _ = this.update_in(cx, |app, window, cx| match result {
                 Ok(resp) => done(app, resp, window, cx),
                 Err(msg) => app.notify_error(msg, window, cx),
+            });
+        })
+        .detach();
+    }
+
+    /// Asks the service to check GitHub for a newer release. The answer
+    /// (or the error) is shown under the button, not as a notification.
+    fn check_updates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.update = UpdateCheck::Checking;
+        cx.notify();
+        let rx = self.backend.call(Request::CheckUpdate);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = rx
+                .await
+                .unwrap_or_else(|_| Err("the service connection was lost".into()));
+            let _ = this.update(cx, |app, cx| {
+                app.update = match result {
+                    Ok(Response::Update(info)) => UpdateCheck::Done(info),
+                    Ok(other) => UpdateCheck::Failed(format!("unexpected reply: {other:?}")),
+                    Err(msg) => {
+                        tracing::warn!("update check failed: {msg}");
+                        UpdateCheck::Failed(msg)
+                    }
+                };
+                cx.notify();
             });
         })
         .detach();
@@ -1873,6 +1911,9 @@ impl GigapairApp {
                     ),
             )
             .child(note(s::RESTART_NOTE))
+            .child(label(s::SETTINGS_UPDATES))
+            .child(self.render_update_check(cx))
+            .child(note(s::UPDATES_NOTE))
             .child(label(s::SETTINGS_LOGS))
             .child(
                 h_flex()
@@ -1908,6 +1949,75 @@ impl GigapairApp {
             .child(note(s::RESET_NOTE))
             .child(h_flex().child(self.reset_button(cx)))
             .into_any_element()
+    }
+
+    /// This version, the button, and what the last check found.
+    fn render_update_check(&self, cx: &mut Context<Self>) -> Div {
+        let p = Palette::get(cx);
+        let checking = matches!(self.update, UpdateCheck::Checking);
+        let result: Option<AnyElement> = match &self.update {
+            UpdateCheck::NotYet | UpdateCheck::Checking => None,
+            UpdateCheck::Done(info) => Some(match &info.newer {
+                None => div()
+                    .text_size(px(12.))
+                    .text_color(p.ink_2)
+                    .child(text(s::UP_TO_DATE))
+                    .into_any_element(),
+                Some(r) => {
+                    let url = r.url.clone();
+                    h_flex()
+                        .flex_wrap()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .text_size(px(12.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(text(s::update_available(&r.version, r.prerelease))),
+                        )
+                        .child(
+                            Button::new("open-release")
+                                .label(s::OPEN_RELEASE)
+                                .primary()
+                                .on_click(move |_, _, cx| {
+                                    tracing::info!("opening the release page");
+                                    cx.open_url(&url);
+                                }),
+                        )
+                        .into_any_element()
+                }
+            }),
+            UpdateCheck::Failed(msg) => Some(
+                div()
+                    .text_size(px(12.))
+                    .text_color(p.danger)
+                    .child(text(msg.clone()))
+                    .into_any_element(),
+            ),
+        };
+        v_flex()
+            .gap(px(6.))
+            .child(
+                h_flex()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .font_features(tabular())
+                            .child(text(s::version_line(gigapair_core::update::CURRENT))),
+                    )
+                    .child(
+                        Button::new("check-updates")
+                            .label(s::CHECK_UPDATES)
+                            .loading(checking)
+                            .disabled(checking)
+                            .on_click(
+                                cx.listener(|app, _, window, cx| app.check_updates(window, cx)),
+                            ),
+                    ),
+            )
+            .children(result)
     }
 }
 

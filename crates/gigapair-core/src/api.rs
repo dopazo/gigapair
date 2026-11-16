@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Contact, PendingPair, TransferInfo};
+use crate::update::UpdateInfo;
 
 /// Bumped on incompatible changes to [`Request`], [`Response`] or [`Event`].
 pub const IPC_VERSION: u32 = 1;
@@ -95,6 +96,9 @@ pub enum Request {
     },
     /// Records that the relay explanation was shown.
     AckRelayNotice,
+    /// Asks GitHub whether a newer release exists (only when the user
+    /// asks; see [`crate::update`]). Answered with [`Response::Update`].
+    CheckUpdate,
 
     /// Turns this connection into a stream of [`Event`]s.
     Subscribe,
@@ -132,6 +136,7 @@ pub enum Response {
     Transfer(TransferInfo),
     Transfers(Vec<TransferInfo>),
     Config(Vec<ConfigEntry>),
+    Update(UpdateInfo),
     Error {
         message: String,
     },
@@ -277,6 +282,15 @@ mod tests {
                 key: "k".into(),
                 value: None,
             }]),
+            Response::Update(UpdateInfo {
+                current: "0.1.0".into(),
+                newer: Some(crate::update::Release {
+                    version: "0.2.0".into(),
+                    url: "u".into(),
+                    prerelease: false,
+                }),
+                releases_url: "r".into(),
+            }),
             Response::Error {
                 message: "e".into(),
             },
@@ -305,6 +319,7 @@ mod tests {
             },
             Request::ConfigGet { key: None },
             Request::History { limit: 3 },
+            Request::CheckUpdate,
         ] {
             roundtrip(r);
         }

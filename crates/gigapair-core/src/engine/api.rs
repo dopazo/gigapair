@@ -213,6 +213,11 @@ impl Inner {
                 self.save_config()?;
                 Response::Ok
             }
+            Request::CheckUpdate => Response::Update(
+                crate::update::check()
+                    .await
+                    .map_err(|e| EngineError::user(e.to_string()))?,
+            ),
         })
     }
 

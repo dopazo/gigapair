@@ -104,6 +104,20 @@ async fn requests_loop(dirs: AppDirs, mut rx: mpsc::UnboundedReceiver<Job>) {
             let _ = reply.send(Err(DATA_DELETED.into()));
             continue;
         }
+        // Waits on GitHub (up to the check's timeout): on a connection of
+        // its own, so accepting or pausing a transfer meanwhile isn't
+        // queued behind it.
+        if req == Request::CheckUpdate {
+            let dirs = dirs.clone();
+            tokio::spawn(async move {
+                let result = match ipc::connect_or_spawn(&dirs, "app-update").await {
+                    Ok((mut c, _)) => c.call(req).await.map_err(|e| e.to_string()),
+                    Err(e) => Err(e.to_string()),
+                };
+                let _ = reply.send(result);
+            });
+            continue;
+        }
         let mut result = Err(String::new());
         // One retry with a fresh connection if the service restarted.
         for _attempt in 0..2 {
