@@ -96,6 +96,7 @@ Run `cargo fmt` and `cargo clippy` before considering a change done.
 - **Errors:** `thiserror` for library errors in `gigapair-core`, `anyhow` at binary edges. Error messages tell the user what to do next.
 - **Logging:** `tracing`. No secrets, no full file contents. Both `gigapaird` and `gigapair-app` log to daily files via `gigapair_core::logging::init`; log state changes and errors that a bug report would need, not every progress tick.
 - No `unwrap()`/`expect()` in non-test code paths that can fail at runtime.
+- `skills/gigapair/` is the Agent Skill shipped to users (not a skill for working on this repo, which is why it isn't under `.claude/skills/`). When CLI commands, flags, output, error messages, settings or install steps change, update `skills/gigapair/SKILL.md` and its `references/` in the same change.
 - License: MIT (see `LICENSE`). New dependencies must be MIT-compatible (e.g. MIT, Apache-2.0, BSD); avoid copyleft (GPL, AGPL).
 
 ## Out of scope for v1

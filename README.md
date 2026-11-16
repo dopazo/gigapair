@@ -83,6 +83,42 @@ gigapair status --watch               # progress, speed, direct or relay
 
 All commands, headless servers, settings, where data is stored and logs: [docs/usage.md](docs/usage.md).
 
+### Use Gigapair from Claude Code
+
+A skill is a set of instructions that Claude Code reads when a task needs it. The [Gigapair skill](skills/gigapair/SKILL.md) teaches Claude how to install Gigapair, send and receive files with the CLI, and fix common problems. Once it is installed, you can ask things like:
+
+- *"Install Gigapair on this computer."*
+- *"Send ~/Videos/wedding to my NAS with Gigapair and tell me when it's done."*
+- *"My Gigapair transfer is slow and says 'via relay'. Why?"*
+
+To install it, open a terminal and run **one** of these commands. Each downloads this repository from GitHub and copies only the skill's folder into Claude Code's skills folder.
+
+**macOS or Linux, for all your projects:**
+
+```sh
+mkdir -p ~/.claude/skills && curl -fsSL https://github.com/dopazo/gigapair/archive/refs/heads/main.tar.gz | tar -xz -C ~/.claude/skills --strip-components=2 gigapair-main/skills/gigapair
+```
+
+**macOS or Linux, for one project only** (run it inside that project's folder):
+
+```sh
+mkdir -p .claude/skills && curl -fsSL https://github.com/dopazo/gigapair/archive/refs/heads/main.tar.gz | tar -xz -C .claude/skills --strip-components=2 gigapair-main/skills/gigapair
+```
+
+**Windows (PowerShell), for all your projects:**
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null; curl.exe -fsSL -o "$env:TEMP\gigapair-src.tar.gz" https://github.com/dopazo/gigapair/archive/refs/heads/main.tar.gz; tar -xzf "$env:TEMP\gigapair-src.tar.gz" -C "$HOME\.claude\skills" --strip-components=2 gigapair-main/skills/gigapair
+```
+
+**Windows (PowerShell), for one project only** (run it inside that project's folder):
+
+```powershell
+New-Item -ItemType Directory -Force ".claude\skills" | Out-Null; curl.exe -fsSL -o "$env:TEMP\gigapair-src.tar.gz" https://github.com/dopazo/gigapair/archive/refs/heads/main.tar.gz; tar -xzf "$env:TEMP\gigapair-src.tar.gz" -C ".claude\skills" --strip-components=2 gigapair-main/skills/gigapair
+```
+
+To check it, type `/skills` in Claude Code: **gigapair** should be in the list. If you had no skills folder before, run `/reload-skills` once (or start a new session). To update, run the same command again. To remove, delete the `gigapair` folder inside `.claude/skills`.
+
 ## More
 
 - [How it works](docs/how-it-works.md): the service, the transfer steps, relays and file handling.
