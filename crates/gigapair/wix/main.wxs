@@ -95,17 +95,23 @@
              reboot; instead the installer ends the service and the app
              itself. Quitting the app never stops a transfer, and an
              interrupted transfer resumes from its verified blocks when the
-             service starts again (the app starts it on launch). -->
+             service starts again (the app starts it on launch).
+             The app goes first (Sequence): it restarts a service that
+             stops, so closing the service first could leave a fresh copy
+             of the old gigapaird.exe running, and its file locked, while
+             the files are replaced. -->
         <Property Id='MSIRESTARTMANAGERCONTROL' Value='Disable'/>
         <util:CloseApplication
-            Id='CloseService'
-            Target='gigapaird.exe'
+            Id='CloseApp'
+            Target='gigapair-app.exe'
+            Sequence='1'
             CloseMessage='no'
             TerminateProcess='0'
             RebootPrompt='no'/>
         <util:CloseApplication
-            Id='CloseApp'
-            Target='gigapair-app.exe'
+            Id='CloseService'
+            Target='gigapaird.exe'
+            Sequence='2'
             CloseMessage='no'
             TerminateProcess='0'
             RebootPrompt='no'/>
