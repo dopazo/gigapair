@@ -391,13 +391,26 @@ impl Db {
     /// Changes the status of an unfinished transfer. A finished one
     /// (completed, rejected, cancelled or failed) keeps its status: the
     /// first ending wins, so a late retry or error can't revive a transfer
-    /// that was cancelled meanwhile. Returns whether anything changed.
+    /// that was cancelled meanwhile. A paused one only ends (or is resumed
+    /// with [`Db::unpause`]): a task that was stopped by the pause but is
+    /// still finishing a step can't mark it active again. Returns whether
+    /// anything changed.
     pub fn set_status(&self, id: &str, status: TransferStatus) -> DbResult<bool> {
         let finished = status.is_terminal().then(now_secs);
         let changed = self.lock().execute(
             "UPDATE transfers SET status = ?2, finished_at = COALESCE(?3, finished_at)
-             WHERE id = ?1 AND status NOT IN ('completed', 'rejected', 'cancelled', 'failed')",
-            params![id, status.as_str(), finished],
+             WHERE id = ?1 AND status NOT IN ('completed', 'rejected', 'cancelled', 'failed')
+               AND (status <> 'paused' OR ?4)",
+            params![id, status.as_str(), finished, status.is_terminal()],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Moves a paused transfer to `status`. Returns whether it was paused.
+    pub fn unpause(&self, id: &str, status: TransferStatus) -> DbResult<bool> {
+        let changed = self.lock().execute(
+            "UPDATE transfers SET status = ?2 WHERE id = ?1 AND status = 'paused'",
+            params![id, status.as_str()],
         )?;
         Ok(changed > 0)
     }
@@ -701,6 +714,23 @@ mod tests {
         assert!(db.remove_contact("n1").unwrap());
         assert!(!db.remove_contact("n1").unwrap());
         assert!(db.contact("n1").unwrap().is_none());
+    }
+
+    #[test]
+    fn paused_only_ends_or_unpauses() {
+        let db = Db::open_in_memory().unwrap();
+        db.insert_transfer(&sample("t1", TransferStatus::Paused), &[], &[])
+            .unwrap();
+        let status = |db: &Db| db.transfer("t1").unwrap().unwrap().status;
+        // A task stopped by the pause can't make it active again.
+        assert!(!db.set_status("t1", TransferStatus::Transferring).unwrap());
+        assert!(!db.set_status("t1", TransferStatus::Verifying).unwrap());
+        assert_eq!(status(&db), TransferStatus::Paused);
+        assert!(db.unpause("t1", TransferStatus::Queued).unwrap());
+        assert!(!db.unpause("t1", TransferStatus::Queued).unwrap());
+        assert!(db.set_status("t1", TransferStatus::Paused).unwrap());
+        assert!(db.set_status("t1", TransferStatus::Cancelled).unwrap());
+        assert_eq!(status(&db), TransferStatus::Cancelled);
     }
 
     #[test]

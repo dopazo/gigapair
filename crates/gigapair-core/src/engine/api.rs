@@ -315,15 +315,21 @@ impl Inner {
             Direction::Send => {
                 let needs_hash = self.db.files(id)?.iter().any(|f| f.root_hash.is_none());
                 if needs_hash {
-                    self.set_status(id, TransferStatus::Preparing);
+                    if !self.unpause(id, TransferStatus::Preparing) {
+                        return Ok(());
+                    }
                     send::start_prepare(self, id);
                 } else {
-                    self.set_status(id, TransferStatus::WaitingAccept);
+                    if !self.unpause(id, TransferStatus::WaitingAccept) {
+                        return Ok(());
+                    }
                     send::start_offer(self, id);
                 }
             }
             Direction::Receive => {
-                self.set_status(id, TransferStatus::Queued);
+                if !self.unpause(id, TransferStatus::Queued) {
+                    return Ok(());
+                }
                 recv::start_download(self, id);
             }
         }

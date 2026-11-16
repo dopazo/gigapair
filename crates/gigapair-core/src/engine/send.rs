@@ -315,6 +315,12 @@ async fn offer_loop(inner: &Arc<Inner>, id: &str, token: &CancellationToken) {
                     }
                 }
             },
+            // The other device speaks another protocol version: retrying
+            // can't help, so say so now rather than wait forever.
+            Err(e @ NetError::Wire(crate::wire::WireError::Incompatible { .. })) => {
+                inner.fail(id, &e.to_string());
+                return;
+            }
             Err(e) => {
                 tracing::debug!(transfer = id, "offer not delivered: {e}");
                 inner.set_note(id, Some(format!("Waiting for {name} to come online")));
@@ -604,7 +610,12 @@ async fn stream_file(
 ) -> Result<(), NetError> {
     let mut buf = vec![0u8; CHUNK];
     let mut sent = 0u64;
-    let started = Instant::now();
+    // The upload limit is paced over a window that restarts whenever the
+    // limit changes, so bytes sent before (unlimited, or at another rate)
+    // never turn into a long sleep.
+    let mut window_limit = None;
+    let mut window_start = Instant::now();
+    let mut window_sent = 0u64;
     while sent < len {
         let want = ((len - sent) as usize).min(CHUNK);
         let n = tokio::select! {
@@ -621,10 +632,17 @@ async fn stream_file(
         sent += n as u64;
         inner.progress(id, start_done + sent);
 
-        let limit = inner.config().upload_limit_kib;
-        if let Some(kib) = limit.filter(|k| *k > 0) {
-            let expected = Duration::from_secs_f64(sent as f64 / (kib as f64 * 1024.0));
-            let elapsed = started.elapsed();
+        let limit = inner.config().upload_limit_kib.filter(|k| *k > 0);
+        if limit != window_limit {
+            window_limit = limit;
+            window_start = Instant::now();
+            window_sent = 0;
+        } else {
+            window_sent += n as u64;
+        }
+        if let Some(kib) = limit {
+            let expected = Duration::from_secs_f64(window_sent as f64 / (kib as f64 * 1024.0));
+            let elapsed = window_start.elapsed();
             if expected > elapsed {
                 tokio::select! {
                     _ = token.cancelled() => return Err(NetError::Connect("stopped".into())),
