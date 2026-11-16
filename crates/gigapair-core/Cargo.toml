@@ -29,6 +29,11 @@ filetime = "0.2"
 tokio-util = "0.7"
 n0-future = "0.3"
 semver = "1"
+# "Check for updates" (GitHub releases API). Already built for iroh: same
+# versions, rustls with ring and the Mozilla roots, no extra TLS stack.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

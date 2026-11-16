@@ -14,4 +14,5 @@ pub mod paths;
 pub mod reset;
 pub mod service;
 pub mod types;
+pub mod update;
 pub mod wire;

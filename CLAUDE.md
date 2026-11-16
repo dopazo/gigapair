@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Gigapair is a peer-to-peer app for moving very large files (50–200+ GB) between paired devices: end-to-end encrypted, BLAKE3-verified and resumable. Rust workspace, GPUI desktop UI, CLI, and a background service.
 
 - Full product spec: `spec_gigapair.md` (in Spanish). It is the source of truth for scope, requirements (RF-xx / RNF-xx) and stage plan. Cite requirement IDs in commits and PRs when relevant.
-- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution): minimal release pipeline with dist (see `docs/releasing.md`); the macOS DMG/`.app` is built in CI (`scripts/macos-bundle.sh`, `.github/workflows/build-dmg.yml`; untested on a real Mac until the first tag), the Linux `.deb`/`.rpm` (`scripts/linux-packages.sh`, `packaging/linux/`, `.github/workflows/build-linux-packages.yml`; built and install/remove tested for the deb on Ubuntu in WSL, the rpm only inspected), AppImage/Flatpak, other channels, the system-wide service and the update notice come later.
+- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution): minimal release pipeline with dist (see `docs/releasing.md`); the macOS DMG/`.app` is built in CI (`scripts/macos-bundle.sh`, `.github/workflows/build-dmg.yml`; untested on a real Mac until the first tag), the Linux `.deb`/`.rpm` (`scripts/linux-packages.sh`, `packaging/linux/`, `.github/workflows/build-linux-packages.yml`; built and install/remove tested for the deb on Ubuntu in WSL, the rpm only inspected), AppImage/Flatpak, other channels, the system-wide service and an automatic update notice come later (checking is manual: Settings → Check for updates, `gigapair check-update`).
 
 ## Architecture
 
@@ -43,7 +43,7 @@ These come from the spec and are easy to break by accident:
 - **Only paired contacts** can send. Default is manual accept; auto-accept is a per-contact opt-in. Check free space before accepting (RF-09).
 - **Keep-awake** guard is held only while transfers are active, and released when the last one ends.
 - **Relay transparency.** Every transfer exposes `direct` vs `relay` (with relay name) in the UI, `gigapair status` and history. Honor the "direct only" setting.
-- **No telemetry.** No network traffic except to the contact and the relay. Logs are local only.
+- **No telemetry.** No network traffic except to the contact and the relay, plus GitHub's releases API when the user asks to check for updates (`update`). Logs are local only.
 - **Secrets.** Node private key in the OS keyring (`keyring` crate); fallback to a `0600` file only in headless/server mode. Never log keys or pairing codes.
 - **Persisted state (RNF-07).** Queue and transfer state live in SQLite and must survive process kill and reboot.
 
@@ -106,7 +106,7 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 
 ## Code map
 
-- `gigapair-core`: `paths` (sanitizing, collisions, no-clobber rename, free space), `manifest` (scan + BLAKE3 hashing, 4 MiB blocks), `pairing` (codes, fingerprint), `wire` (peer protocol), `api` + `ipc` (client↔service), `db` (SQLite), `config`, `keys`, `dirs` (`GIGAPAIR_HOME`), `logging` (daily log files + panic hook, shared by the service and the app; level via `GIGAPAIR_LOG`), `service` (user-level autostart), `reset` (deleting this device's data: `gigapair reset` and Settings → Delete this device's data), `engine/` (`net`, `pair`, `send`, `recv`, `api`).
+- `gigapair-core`: `paths` (sanitizing, collisions, no-clobber rename, free space), `manifest` (scan + BLAKE3 hashing, 4 MiB blocks), `pairing` (codes, fingerprint), `wire` (peer protocol), `api` + `ipc` (client↔service), `db` (SQLite), `config`, `keys`, `dirs` (`GIGAPAIR_HOME`), `logging` (daily log files + panic hook, shared by the service and the app; level via `GIGAPAIR_LOG`), `service` (user-level autostart), `reset` (deleting this device's data: `gigapair reset` and Settings → Delete this device's data), `update` (check GitHub for a newer release, on request only; the service makes the request), `engine/` (`net`, `pair`, `send`, `recv`, `api`).
 - `gigapaird`: IPC server, keep-awake thread (`awake.rs`), notifications (`notify.rs`), instance lock.
 - `gigapair-cli`: `lib.rs` (commands), `output.rs`, `strings.rs` (all user text).
 - `gigapair-app`: `shell.rs` (owns the service connection, tray and window lifecycle; quit mode is explicit), `backend.rs` (IPC on a Tokio thread), `app.rs` (the window), `tray/` (per-OS tray + `summarize`), `single.rs` (one app per user: a second launch shows the window), `icon.rs` (tray icon: the G mark, drawn in code), `style.rs` (Archivo font, light/dark themes from `assets/theme.json`, glyphs, extra colours), `qr.rs`, `strings.rs`. The visual design is `docs/design/gigapair-visual.html`.
@@ -117,7 +117,7 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 
 1. Manual acceptance test of stage 1 across two real networks (one behind CGNAT) with relays; check `direct`/`relay` labelling and the first-relay notice.
 2. Tray (RF-14): implemented in `gigapair-app` (`shell.rs`, `tray/`, `single.rs`). Verified on Linux only; the Windows code is cross-checked (`cargo check --target x86_64-pc-windows-gnu`) but not run, macOS is compiled in CI but untested. The tray icon is the G mark drawn in `icon.rs`; on Windows the `.exe`, window and MSI use `crates/gigapair/assets/gigapair.ico` (embedded by `build.rs`). Pending: macOS manual test, the stage 3 reboot test, macOS/Linux app icon.
-3. Distribution follow-ups: AppImage, Flatpak (the CLI on the host needs the service socket inside the sandbox), AUR package, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); "new release available" notice (must respect no-telemetry: opt-in or clearly explained). The release pipeline has never run: the first tag is its test.
+3. Distribution follow-ups: AppImage, Flatpak (the CLI on the host needs the service socket inside the sandbox), AUR package, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); an automatic "new release available" notice (must respect no-telemetry: opt-in or clearly explained; the manual check exists, `update`). The release pipeline has never run: the first tag is its test.
 4. Relay: the first-use notice is emitted once per install; the app shows it as a banner, the CLI prints it during `send`.
 5. No LAN discovery (iroh 1.4 has no mDNS); contacts rely on n0 DNS (relay URL only) plus stored addresses and a stable UDP port.
 6. Ticket sends to non-contacts (RF-16) not implemented.

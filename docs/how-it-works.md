@@ -30,6 +30,7 @@ Gigapair is built on [iroh](https://github.com/n0-computer/iroh) for connectivit
 ## Privacy and relays
 
 - **No telemetry.** Nothing leaves your computer except the connection to your contact and, when needed, the relay. Logs stay local; you can export them to report a bug.
+- **Checking for updates** (Settings → **Check for updates**, or `gigapair check-update`) asks GitHub for the list of Gigapair releases, only when you ask. The request carries nothing about you or your transfers beyond what any web request does (your IP address); nothing is downloaded or installed.
 - **Relays can't read your files.** When a direct connection isn't possible, traffic goes through a relay (by default, the public relays run by n0). A relay only forwards end-to-end encrypted data. It **can** see both devices' IP addresses, when a transfer happens and how much data is sent.
 - **You stay in control.** The first time a relay is used, Gigapair tells you. In settings you can use your own relay or enable **direct only**: file contents then never go through a relay (the transfer waits instead), although relays are still used to find contacts and set up connections. The public relays are shared third-party servers; n0 advises against sending sensitive data through them, so for confidential material use direct only or your own relay. History records whether each transfer was direct or relayed.
 

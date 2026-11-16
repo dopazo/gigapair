@@ -137,3 +137,16 @@ pub const RESET_PARTIAL: &str = "Gigapair's data was deleted, except for these (
 
 pub const NO_LOGS: &str = "No log files yet.";
 pub const LOGS_HINT: &str = "Newest first. Attach these files when reporting a problem; they contain no keys or pairing codes.";
+
+pub const CHECKING_UPDATES: &str = "Asking GitHub for the latest release...";
+
+pub fn update_available(current: &str, newer: &str, prerelease: bool, url: &str) -> String {
+    let kind = if prerelease { " (pre-release)" } else { "" };
+    format!(
+        "Gigapair {newer}{kind} is available; you have {current}.\nRelease notes and downloads: {url}\nDownload it and install it over this version: your contacts, settings and history are kept."
+    )
+}
+
+pub fn up_to_date(current: &str) -> String {
+    format!("Gigapair {current} is the latest version.")
+}

@@ -108,6 +108,9 @@ enum Command {
     },
     /// Show where the log files are (service and desktop app).
     Logs,
+    /// Ask GitHub whether a newer version of Gigapair exists. Only shows
+    /// it; nothing is downloaded or installed.
+    CheckUpdate,
     /// Delete everything Gigapair keeps on this device: contacts, this
     /// device's identity, history, settings and logs. Received files stay.
     Reset {
@@ -291,6 +294,22 @@ async fn run(cli: Cli) -> Result<()> {
             other => Err(unexpected(other)),
         },
         Command::Config { action } => config(&mut client, action).await,
+        Command::CheckUpdate => {
+            eprintln!("{}", s::CHECKING_UPDATES);
+            match client.call(Request::CheckUpdate).await? {
+                Response::Update(info) => {
+                    match info.newer {
+                        Some(r) => println!(
+                            "{}",
+                            s::update_available(&info.current, &r.version, r.prerelease, &r.url)
+                        ),
+                        None => println!("{}", s::up_to_date(&info.current)),
+                    }
+                    Ok(())
+                }
+                other => Err(unexpected(other)),
+            }
+        }
         Command::Service { .. } | Command::Logs | Command::Reset { .. } => unreachable_service(),
     }
 }

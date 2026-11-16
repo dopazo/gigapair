@@ -128,6 +128,8 @@ Auto-accept lets that contact write to this disk without asking: set it only bec
 
 ## Update and remove
 
+**Is there a newer version?** `gigapair check-update` (or Settings → **Check for updates** in the app) asks GitHub's release list and prints the newer release's page, if any. It only runs when asked; Gigapair never checks on its own.
+
 **Update:** install the newer version the same way. Contacts, history and settings are kept. A service that was running keeps the old version in memory until it restarts; the first `gigapair` command (or app launch) after the update notices and restarts it, printing `Restarted the Gigapair service: it was still running vX ...`. Interrupted transfers resume.
 
 If instead it fails with `... is older than this program ... and restarting it didn't help`, an old `gigapaird` is still installed (a partial copy, or two installs on the `PATH`): install Gigapair again, and check that `gigapair --version` and `gigapaird --version` match.

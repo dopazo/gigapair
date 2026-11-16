@@ -77,6 +77,23 @@ pub const SETTINGS_DISCOVERY: &str =
 pub const SETTINGS_RELAY: &str = "Custom relay URL (empty: public n0 relays)";
 pub const SETTINGS_LIMIT: &str = "Upload limit in KiB/s (0: unlimited)";
 pub const SETTINGS_NODE: &str = "This device's id";
+pub const SETTINGS_UPDATES: &str = "Version and updates";
+pub const CHECK_UPDATES: &str = "Check for updates";
+pub const UPDATES_NOTE: &str = "Asks GitHub for the list of Gigapair releases, only when you click. Nothing about you or your transfers is sent, and nothing is downloaded or installed.";
+pub const UP_TO_DATE: &str = "You have the latest version.";
+pub const OPEN_RELEASE: &str = "Open the release page";
+
+pub fn version_line(version: &str) -> String {
+    format!("Gigapair {version}")
+}
+
+pub fn update_available(version: &str, prerelease: bool) -> String {
+    let kind = if prerelease { " (pre-release)" } else { "" };
+    format!(
+        "Gigapair {version}{kind} is available. Download it and install it over this version: your contacts, settings and history are kept."
+    )
+}
+
 pub const SETTINGS_LOGS: &str = "Logs folder";
 pub const LOGS_NOTE: &str = "Logs of the service and the app, one file per day, the last 7 days. They stay on this computer and contain no keys or pairing codes; attach them when reporting a problem.";
 pub const SETTINGS_RESET: &str = "Delete this device's data";

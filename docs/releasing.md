@@ -37,4 +37,4 @@ Edit `dist-workspace.toml` and run `dist generate` (install with `cargo install 
 
 ## Not yet
 
-AppImage, Flatpak, an AUR package, a signed apt/dnf repository, winget, Scoop, Homebrew, publishing to crates.io, code signing, the macOS/Linux app icon, the Windows Service / Linux system unit for servers and the "new release available" notice.
+AppImage, Flatpak, an AUR package, a signed apt/dnf repository, winget, Scoop, Homebrew, publishing to crates.io, code signing, the macOS/Linux app icon, the Windows Service / Linux system unit for servers, and an automatic "new release available" notice (today the check is manual: Settings → Check for updates, `gigapair check-update`).

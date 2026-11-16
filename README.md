@@ -31,7 +31,7 @@ Gigapair is a desktop app and CLI for sending very large files (tens to hundreds
 
 ## Privacy
 
-No telemetry, and no network traffic except to your contact and, when needed, a relay. A relay only forwards end-to-end encrypted data; it can see both IP addresses and how much is sent. You can run your own relay or allow **direct connections only**. Details in [How it works](docs/how-it-works.md#privacy-and-relays).
+No telemetry, and no network traffic except to your contact and, when needed, a relay (plus GitHub's list of releases, only when you click **Check for updates**). A relay only forwards end-to-end encrypted data; it can see both IP addresses and how much is sent. You can run your own relay or allow **direct connections only**. Details in [How it works](docs/how-it-works.md#privacy-and-relays).
 
 ## Install
 

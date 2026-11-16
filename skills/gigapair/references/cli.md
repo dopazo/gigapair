@@ -36,6 +36,7 @@
 | `gigapair service install` / `uninstall` | Start the service at login (and now) / stop doing so |
 | `gigapair service start` / `stop` / `status` | Start, stop or check the service |
 | `gigapair logs` | The logs folder and its newest files |
+| `gigapair check-update` | Ask GitHub whether a newer Gigapair release exists and print its page. Only shows it: nothing is downloaded or installed. Someone on a stable version is only told about stable releases; on a pre-release, about both |
 | `gigapair reset [--yes]` | Delete everything Gigapair keeps on this device: contacts, identity, history, settings, logs and the start at login. Contacts aren't told; to them the device just appears offline. Received files stay. Irreversible: every contact must pair again. Without a terminal it needs `--yes` |
 | `gigapair --version` | The version |
 
