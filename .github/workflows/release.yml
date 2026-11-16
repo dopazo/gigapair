@@ -315,7 +315,12 @@ jobs:
           RELEASE_COMMIT: "${{ github.sha }}"
         run: |
           # Write and read notes from a file to avoid quoting breaking things
-          echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
+          # Our own installers (DMG, deb, rpm) are not known to dist: list
+          # them first (.github/release-notes-extra.md, edited by hand).
+          {
+            sed "s#__TAG__#${{ needs.plan.outputs.tag }}#g" .github/release-notes-extra.md
+            echo "$ANNOUNCEMENT_BODY"
+          } > $RUNNER_TEMP/notes.txt
 
           gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
 
