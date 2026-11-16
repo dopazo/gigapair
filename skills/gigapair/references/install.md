@@ -23,7 +23,7 @@ tag=$(curl -fsSL https://api.github.com/repos/dopazo/gigapair/releases | grep '"
 $tag = (Invoke-RestMethod https://api.github.com/repos/dopazo/gigapair/releases)[0].tag_name
 ```
 
-If each of your commands runs in a fresh shell, set `tag` in the same command as the download, or write the literal tag (e.g. `v0.1.0-beta.3`) into the URL.
+If each of your commands runs in a fresh shell, set `tag` in the same command as the download, or write the literal tag (e.g. `v0.1.0-beta.4`) into the URL.
 
 ## Install
 
