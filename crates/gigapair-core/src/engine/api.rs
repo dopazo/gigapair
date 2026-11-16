@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use super::{EngineError, EngineResult, Inner, recv, send};
 use crate::api::{ConfigEntry, Event, Request, Response, StatusInfo};
 use crate::config::KEYS;
-use crate::types::{Contact, Direction, TransferInfo, TransferStatus};
+use crate::types::{Contact, Direction, TransferInfo, TransferStatus, short_id};
 use crate::wire::{Notice, PROTOCOL_VERSION, PeerRequest};
 
 impl super::Engine {
@@ -67,6 +67,11 @@ impl Inner {
                 let name = name.trim();
                 if name.is_empty() {
                     return Err(EngineError::user("the name can't be empty"));
+                }
+                if self.unique_contact_name(name, &c.node_id)? != name {
+                    return Err(EngineError::user(format!(
+                        "another contact is already called {name:?}; choose another name"
+                    )));
                 }
                 self.db.rename_contact(&c.node_id, name)?;
                 self.emit(Event::ContactsChanged);
@@ -227,36 +232,62 @@ impl Inner {
             .ok_or_else(|| EngineError::user("no such transfer"))
     }
 
-    /// Finds a contact by node id, name or unique prefix of either.
+    /// Finds a contact by node id, name or unique prefix of either. A name
+    /// shared by several contacts is ambiguous, never resolved to one of
+    /// them at random.
     pub(super) fn resolve_contact(&self, query: &str) -> EngineResult<Contact> {
         let q = query.trim();
         let contacts = self.contacts()?;
-        if let Some(c) = contacts
-            .iter()
-            .find(|c| c.node_id == q || c.name.eq_ignore_ascii_case(q))
-        {
+        if let Some(c) = contacts.iter().find(|c| c.node_id == q) {
             return Ok(c.clone());
         }
-        let ql = q.to_lowercase();
-        let matches: Vec<&Contact> = contacts
+        let exact: Vec<&Contact> = contacts
             .iter()
-            .filter(|c| {
-                (q.len() >= 4 && c.node_id.starts_with(q)) || c.name.to_lowercase().starts_with(&ql)
-            })
+            .filter(|c| c.name.to_lowercase() == q.to_lowercase())
             .collect();
+        let ql = q.to_lowercase();
+        let matches: Vec<&Contact> = if exact.is_empty() {
+            contacts
+                .iter()
+                .filter(|c| {
+                    (q.len() >= 4 && c.node_id.starts_with(q))
+                        || c.name.to_lowercase().starts_with(&ql)
+                })
+                .collect()
+        } else {
+            exact
+        };
         match matches.as_slice() {
             [one] => Ok((*one).clone()),
             [] => Err(EngineError::user(format!(
                 "no contact matches {q:?}; run `gigapair contacts` to list them"
             ))),
             many => Err(EngineError::user(format!(
-                "{q:?} matches several contacts ({}); be more specific",
+                "{q:?} matches several contacts ({}); use more of the name, or the start of the node id",
                 many.iter()
-                    .map(|c| c.name.as_str())
+                    .map(|c| format!("{} {}", c.name, short_id(&c.node_id)))
                     .collect::<Vec<_>>()
                     .join(", ")
             ))),
         }
+    }
+
+    /// `name`, or `name (2)`, `name (3)`… if another contact already uses
+    /// it (any case), so every contact can be named on its own.
+    pub(super) fn unique_contact_name(&self, name: &str, node: &str) -> EngineResult<String> {
+        let taken: Vec<String> = self
+            .contacts()?
+            .into_iter()
+            .filter(|c| c.node_id != node)
+            .map(|c| c.name.to_lowercase())
+            .collect();
+        let mut candidate = name.to_owned();
+        let mut n = 2;
+        while taken.contains(&candidate.to_lowercase()) {
+            candidate = format!("{name} ({n})");
+            n += 1;
+        }
+        Ok(candidate)
     }
 
     /// Finds a transfer by id or unique prefix.

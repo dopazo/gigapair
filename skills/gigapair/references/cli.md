@@ -54,7 +54,9 @@
 
 ## Naming contacts and transfers
 
-A **contact** argument matches, in order: the exact node id or the name in any case; otherwise a unique match on the start of the name or the first 4+ characters of the node id. `studio` finds "Studio Mac". If two contacts match, the error lists them: `"st" matches several contacts (Studio Mac, Storage); be more specific`.
+A **contact** argument matches, in order: the exact node id or the name in any case; otherwise a unique match on the start of the name or the first 4+ characters of the node id. `studio` finds "Studio Mac". If several contacts match, the error lists them with the start of their node ids, and nothing is sent.
+
+Names are unique (ignoring case): pairing with a second device of the same name stores it as `name (2)`, and `contacts rename` refuses a name another contact already has.
 
 A **transfer id** is hex. `status`, `requests` and `history` print the first 8 characters; any prefix that matches only one transfer works.
 

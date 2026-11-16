@@ -555,6 +555,52 @@ async fn unpaired_device_cannot_send() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn contacts_with_the_same_name_stay_apart() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = start(&tmp.path().join("a"), |_| {}).await;
+    let b = start(&tmp.path().join("b"), |_| {}).await;
+    let c = start(&tmp.path().join("c"), |_| {}).await;
+    pair(&a, &b, "MacBook", "alice").await;
+    pair(&a, &c, "macbook", "alice").await;
+
+    let Response::Contacts(list) = a.handle(Request::Contacts).await else {
+        panic!("no contacts")
+    };
+    let mut names: Vec<_> = list.iter().map(|c| c.name.clone()).collect();
+    names.sort();
+    assert_eq!(names, ["MacBook", "macbook (2)"]);
+
+    // Each name finds its own contact.
+    let trusted = a
+        .handle(Request::ContactTrust {
+            contact: "macbook".into(),
+            auto_accept: true,
+        })
+        .await;
+    assert!(matches!(trusted, Response::Ok), "{trusted:?}");
+    let Response::Contacts(list) = a.handle(Request::Contacts).await else {
+        panic!("no contacts")
+    };
+    let b_id = b.node_id().to_string();
+    for contact in &list {
+        assert_eq!(contact.auto_accept, contact.node_id == b_id, "{contact:?}");
+    }
+
+    // Renaming onto another contact's name is refused.
+    let renamed = a
+        .handle(Request::ContactRename {
+            contact: "macbook (2)".into(),
+            name: "MACBOOK".into(),
+        })
+        .await;
+    assert!(matches!(renamed, Response::Error { .. }), "{renamed:?}");
+
+    for e in [a, b, c] {
+        e.shutdown().await;
+    }
+}
+
 /// Manual throughput check: `GIGAPAIR_TEST_MB=4096 cargo test --release
 /// -p gigapair-core --test transfer throughput -- --ignored --nocapture`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
