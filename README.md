@@ -41,7 +41,7 @@ Download from the [releases page](https://github.com/dopazo/gigapair/releases). 
 | --- | --- |
 | Windows 10/11 | `gigapair-x86_64-pc-windows-msvc.msi`: adds **Gigapair** to the Start menu, the CLI to the `PATH`, and a firewall exception for the service |
 | macOS 11+ (Apple silicon and Intel) | `gigapair-aarch64-apple-darwin.dmg` (Apple silicon) or `gigapair-x86_64-apple-darwin.dmg` (Intel): open it and drag **Gigapair** to Applications. The first launch needs one confirmation (see below). The CLI is inside the app; the shell installer below also works |
-| Linux (x86_64, glibc 2.35+) | Debian, Ubuntu and derivatives: `gigapair-x86_64-unknown-linux-gnu.deb`, with `sudo apt install ./gigapair-x86_64-unknown-linux-gnu.deb`. Fedora, RHEL and openSUSE: the `.rpm`, with `sudo dnf install ./gigapair-x86_64-unknown-linux-gnu.rpm`. Both add Gigapair to the application menu and install for all users; remove it with `sudo apt remove gigapair` (or `dnf remove`), which also deletes each user's login entry for the service but keeps contacts and received files. Any other distribution: the shell installer below, then run `gigapair-app` |
+| Linux (x86_64, glibc 2.35+) | Debian, Ubuntu and derivatives: `gigapair-x86_64-unknown-linux-gnu.deb`, with `sudo apt install ./gigapair-x86_64-unknown-linux-gnu.deb`. Fedora 36 or newer: the `.rpm`, with `sudo dnf install ./gigapair-x86_64-unknown-linux-gnu.rpm`. Both add Gigapair to the application menu and install for all users; remove it with `sudo apt remove gigapair` (or `dnf remove`), which also deletes each user's login entry for the service but keeps contacts and received files. Any other distribution (including openSUSE, whose package names differ, and RHEL 9, Rocky and AlmaLinux 9, whose glibc is too old): the shell installer below, then run `gigapair-app` |
 
 Or install from a terminal, which also suits servers:
 
@@ -52,11 +52,10 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/release
 # Windows (PowerShell): downloads the MSI and installs it with a progress bar
 $msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
 iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.4/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
-$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
-if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
+$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru; if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
 ```
 
-So far there are only pre-releases, which GitHub never marks as *latest*: replace the version with the newest one on the releases page. Unattended installs (scripts, servers, AI agents), installing without administrator rights and setting up a server that receives on its own are in [docs/usage.md](docs/usage.md#from-a-terminal).
+On Windows, press Enter if the last line is still waiting after you paste. So far there are only pre-releases, which GitHub never marks as *latest*: replace the version with the newest one on the releases page. Unattended installs (scripts, servers, AI agents), installing without administrator rights and setting up a server that receives on its own are in [docs/usage.md](docs/usage.md#from-a-terminal).
 
 The binaries are not code-signed yet. On Windows, SmartScreen asks once: **More info → Run anyway**. On macOS the first launch is blocked: open **Gigapair** once, then go to **System Settings → Privacy & Security**, scroll down to the message about Gigapair and click **Open Anyway** (or run `xattr -dr com.apple.quarantine /Applications/Gigapair.app`). macOS asks only once. Every release ships SHA-256 checksums and [build attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations) (`gh attestation verify <file> --repo dopazo/gigapair`).
 
