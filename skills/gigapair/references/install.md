@@ -34,7 +34,7 @@ Use the method in this table. Each one lets contacts connect to this device dire
 | Windows 10/11 | The MSI. It adds the firewall exception that direct connections need |
 | macOS 11+ | The DMG |
 | Debian, Ubuntu and derivatives | The `.deb` |
-| Fedora, RHEL, openSUSE | The `.rpm` |
+| Fedora 36+ | The `.rpm` (its dependency names are Fedora's; RHEL 9 has too old a glibc) |
 | Any other Linux (x86_64, glibc 2.35+), or no sudo | The shell installer, per user, into `~/.cargo/bin` |
 
 There are no builds for ARM Linux or musl (Alpine) yet.
@@ -81,7 +81,7 @@ For a Mac used only from a terminal, the shell installer below works too.
 curl -fLO "https://github.com/dopazo/gigapair/releases/download/$tag/gigapair-x86_64-unknown-linux-gnu.deb"
 sudo apt install ./gigapair-x86_64-unknown-linux-gnu.deb
 
-# Fedora, RHEL, openSUSE:
+# Fedora 36+:
 curl -fLO "https://github.com/dopazo/gigapair/releases/download/$tag/gigapair-x86_64-unknown-linux-gnu.rpm"
 sudo dnf install ./gigapair-x86_64-unknown-linux-gnu.rpm
 

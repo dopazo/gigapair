@@ -8,7 +8,7 @@ Download from the [releases page](https://github.com/dopazo/gigapair/releases), 
 | --- | --- |
 | Windows | `gigapair-x86_64-pc-windows-msvc.msi`: installs to Program Files for all users, adds a **Gigapair** entry to the Start menu, puts the CLI on the `PATH` and adds a firewall exception for the service. Asks for administrator rights |
 | macOS 11+ (Apple silicon and Intel) | `gigapair-aarch64-apple-darwin.dmg` (Apple silicon) or `gigapair-x86_64-apple-darwin.dmg` (Intel): open it and drag **Gigapair** to Applications. The first launch needs one confirmation (see below). The CLI is inside the app; the shell installer below also works |
-| Linux (x86_64, glibc 2.35+) | Debian, Ubuntu and derivatives: `gigapair-x86_64-unknown-linux-gnu.deb`, with `sudo apt install ./gigapair-x86_64-unknown-linux-gnu.deb`. Fedora, RHEL and openSUSE: the `.rpm`, with `sudo dnf install ./gigapair-x86_64-unknown-linux-gnu.rpm`. Both add Gigapair to the application menu and install for all users; remove it with `sudo apt remove gigapair` (or `dnf remove`), which also deletes each user's login entry for the service but keeps contacts and received files. Any other distribution: the shell installer below, then run `gigapair-app` |
+| Linux (x86_64, glibc 2.35+) | Debian, Ubuntu and derivatives: `gigapair-x86_64-unknown-linux-gnu.deb`, with `sudo apt install ./gigapair-x86_64-unknown-linux-gnu.deb`. Fedora 36 or newer: the `.rpm`, with `sudo dnf install ./gigapair-x86_64-unknown-linux-gnu.rpm`. Both add Gigapair to the application menu and install for all users; remove it with `sudo apt remove gigapair` (or `dnf remove`), which also deletes each user's login entry for the service but keeps contacts and received files. Any other distribution (including openSUSE, whose package names differ, and RHEL 9, Rocky and AlmaLinux 9, whose glibc is too old): the shell installer below, then run `gigapair-app` |
 | Any | The `.zip`/`.tar.xz` archives: unpack and keep the four programs in the same folder |
 
 ### From a terminal
@@ -19,13 +19,12 @@ macOS and Linux:
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.4/gigapair-installer.sh | sh
 ```
 
-Windows (PowerShell): downloads the MSI and installs it with only a progress bar. Windows asks once for administrator rights (the UAC prompt, which you approve). The MSI is the recommended way, from a terminal too, because only the MSI adds the firewall exception:
+Windows (PowerShell): downloads the MSI and installs it with only a progress bar. Windows asks once for administrator rights (the UAC prompt, which you approve). After pasting, press Enter if the last line is still waiting at the prompt: copied text often lacks the final line break, and that line both installs and reports the result. The MSI is the recommended way, from a terminal too, because only the MSI adds the firewall exception:
 
 ```powershell
 $msi = "$env:TEMP\gigapair.msi"; $log = "$env:TEMP\gigapair-install.log"
 iwr https://github.com/dopazo/gigapair/releases/download/v0.1.0-beta.4/gigapair-x86_64-pc-windows-msvc.msi -OutFile $msi
-$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru
-if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
+$p = Start-Process msiexec -ArgumentList "/i `"$msi`" /passive /norestart /l*v `"$log`"" -Verb RunAs -Wait -PassThru; if ($p.ExitCode -in 0, 3010) { 'Gigapair installed.' } else { "Install failed (msiexec exit code $($p.ExitCode)). Log: $log" }
 ```
 
 **Unattended (scripts, servers, AI agents).** Run from a prompt that already has administrator rights: nothing can approve a UAC prompt on your behalf, so a script that asks for one would wait forever. This version shows no window, and its output says what happened, so whoever runs it doesn't need to read the log:
@@ -303,7 +302,7 @@ The service uses each platform's native mechanism:
 | --- | --- |
 | Windows: the service starts when its user **logs in** (`HKCU\...\Run`), not as a Windows Service | After a reboot, nothing is received until that user signs in |
 | macOS: a LaunchAgent runs only in a logged-in session | Same as on Windows |
-| Linux builds are x86_64 with glibc 2.35+ only | No ARM (Raspberry Pi, most NAS), no musl (Alpine), no older distributions such as RHEL 8 |
+| Linux builds are x86_64 with glibc 2.35+ only | No ARM (Raspberry Pi, most NAS), no musl (Alpine), no older distributions such as RHEL 8 or 9 (glibc 2.34) |
 | The service runs as a user, not as a system account | Run it as a dedicated user (for example `gigapair`) if the machine is shared |
 | Windows without the MSI (PowerShell installer): no firewall exception | More transfers go through a relay; install the MSI instead |
 | Two devices on the same router but on different Wi-Fi networks (or Wi-Fi and cable) that the router keeps apart | The transfer goes through a relay; connect both to the same network |
