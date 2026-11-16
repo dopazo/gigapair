@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::api::Event;
 use crate::config::Config;
-use crate::db::{Db, DbError, TransferRow};
+use crate::db::{Db, DbError, DbResult, TransferRow};
 use crate::dirs::AppDirs;
 use crate::pairing::PairSecret;
 use crate::types::{
@@ -390,13 +390,25 @@ impl Inner {
     /// Persists a status change and notifies clients. Does nothing to a
     /// transfer that already ended (see [`Db::set_status`]).
     pub fn set_status(&self, id: &str, status: TransferStatus) {
-        match self.db.set_status(id, status) {
+        self.status_changed(id, status, self.db.set_status(id, status));
+    }
+
+    /// Resumes a paused transfer as `status`. False if it wasn't paused.
+    pub fn unpause(&self, id: &str, status: TransferStatus) -> bool {
+        let result = self.db.unpause(id, status);
+        let changed = matches!(result, Ok(true));
+        self.status_changed(id, status, result);
+        changed
+    }
+
+    fn status_changed(&self, id: &str, status: TransferStatus, result: DbResult<bool>) {
+        match result {
             Ok(true) => tracing::info!(transfer = id, ?status, "transfer status changed"),
             Ok(false) => {
                 tracing::debug!(
                     transfer = id,
                     ?status,
-                    "transfer already ended; status kept"
+                    "transfer ended or paused; status kept"
                 );
                 return;
             }
