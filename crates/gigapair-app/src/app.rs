@@ -13,7 +13,7 @@ use gigapair_core::types::{
     ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
     format_bytes, format_duration, now_secs,
 };
-use gpui_kit::base::SelectableText;
+use gpui_kit::base::{SelectableText, TextSelection};
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::notification::Notification;
@@ -25,8 +25,9 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, AppContext, ClipboardItem, Context, Div, Entity, ExternalPaths, FontFeatures,
-    FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, PathPromptOptions, Render,
-    SharedString, Stateful, StatefulInteractiveElement, Styled, Svg, Window, div, px, svg,
+    FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    PathPromptOptions, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Svg,
+    Window, div, px, svg,
 };
 
 use crate::backend::{Backend, BackendMsg};
@@ -533,7 +534,7 @@ impl GigapairApp {
                                     .font_family(style::FONT_WIDE)
                                     .text_size(px(13.))
                                     .line_height(px(16.))
-                                    .child(s::APP_NAME),
+                                    .child(text(s::APP_NAME)),
                             )
                             .child(
                                 div()
@@ -558,7 +559,7 @@ impl GigapairApp {
                     .py(px(4.))
                     .text_size(px(12.))
                     .text_color(p.ink_3)
-                    .child(s::NO_CONTACTS),
+                    .child(text(s::NO_CONTACTS)),
             );
         }
         for c in &self.contacts {
@@ -696,7 +697,7 @@ impl GigapairApp {
                     .text_size(px(11.5))
                     .text_color(p.ink_2)
                     .child(glyph(style::icon::AWAKE, 13., p.ink_2))
-                    .child(s::KEEPING_AWAKE),
+                    .child(text(s::KEEPING_AWAKE)),
             );
         }
         col
@@ -778,35 +779,39 @@ impl GigapairApp {
         };
         let percent = t.percent();
 
-        let rate = if status == TransferStatus::Transferring && t.speed_bps > 0 {
-            v_flex()
-                .items_end()
-                .text_size(px(12.))
-                .line_height(px(15.))
-                .child(
-                    div()
-                        .text_color(p.ink)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .font_features(tabular())
-                        .child(format!("{}/s", format_bytes(t.speed_bps))),
-                )
-                .when_some(t.eta_secs, |d, eta| {
-                    d.child(
-                        div()
-                            .text_color(p.ink_2)
-                            .font_features(tabular())
-                            .child(s::time_left(&format_duration(eta))),
-                    )
-                })
-        } else {
-            v_flex().items_end().child(
-                div()
+        let rate =
+            if status == TransferStatus::Transferring && t.speed_bps > 0 {
+                v_flex()
+                    .items_end()
                     .text_size(px(12.))
-                    .text_color(p.ink_2)
-                    .text_right()
-                    .child(status.label()),
-            )
-        };
+                    .line_height(px(15.))
+                    .child(
+                        div()
+                            .text_color(p.ink)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .font_features(tabular())
+                            .child(selectable(
+                                format!("speed-{}", t.id),
+                                format!("{}/s", format_bytes(t.speed_bps)),
+                            )),
+                    )
+                    .when_some(t.eta_secs, |d, eta| {
+                        d.child(div().text_color(p.ink_2).font_features(tabular()).child(
+                            selectable(
+                                format!("eta-{}", t.id),
+                                s::time_left(&format_duration(eta)),
+                            ),
+                        ))
+                    })
+            } else {
+                v_flex().items_end().child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(p.ink_2)
+                        .text_right()
+                        .child(selectable(format!("status-{}", t.id), status.label())),
+                )
+            };
 
         let (big, small) = if mode.is_some() && status != TransferStatus::Preparing {
             amount_parts(Some(t.done_bytes), t.total_bytes)
@@ -846,7 +851,10 @@ impl GigapairApp {
                                 div()
                                     .text_size(px(12.))
                                     .text_color(p.ink_2)
-                                    .child(same_network_hint(&t.peer_name))
+                                    .child(selectable(
+                                        format!("hint-{}", t.id),
+                                        same_network_hint(&t.peer_name),
+                                    ))
                             }),
                     ),
             )
@@ -864,7 +872,12 @@ impl GigapairApp {
                     .text_size(px(12.))
                     .text_color(p.ink_2)
                     .font_features(tabular())
-                    .when(mode.is_some(), |d| d.child(format!("{}%", percent.floor()))),
+                    .when(mode.is_some(), |d| {
+                        d.child(selectable(
+                            format!("percent-{}", t.id),
+                            format!("{}%", percent.floor()),
+                        ))
+                    }),
             )
             .child(
                 div()
@@ -930,9 +943,9 @@ impl GigapairApp {
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(t.peer_name.clone()),
+                            .child(selectable(format!("from-{}", t.id), t.peer_name.clone())),
                     )
-                    .child(s::WANTS_TO_SEND)
+                    .child(selectable(format!("wants-{}", t.id), s::WANTS_TO_SEND))
                     .child(
                         div()
                             .min_w_0()
@@ -945,10 +958,13 @@ impl GigapairApp {
                             .flex_shrink_0()
                             .opacity(0.7)
                             .font_features(tabular())
-                            .child(format!(
-                                "{}, {}",
-                                format_bytes(t.total_bytes),
-                                s::files(t.file_count)
+                            .child(selectable(
+                                format!("size-{}", t.id),
+                                format!(
+                                    "{}, {}",
+                                    format_bytes(t.total_bytes),
+                                    s::files(t.file_count)
+                                ),
                             )),
                     ),
             )
@@ -1033,7 +1049,7 @@ impl GigapairApp {
                     .mt(px(8.))
                     .text_size(px(12.))
                     .text_color(p.ink_3)
-                    .child(s::NO_TRANSFERS),
+                    .child(text(s::NO_TRANSFERS)),
             );
         }
         for ((_, direction, _), list) in groups {
@@ -1054,12 +1070,12 @@ impl GigapairApp {
                         .text_size(px(12.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(dir_glyph(direction, 15., p.ink, &p))
-                        .child(title)
+                        .child(text(title))
                         .child(
                             div()
                                 .text_color(p.ink_3)
                                 .font_weight(FontWeight::NORMAL)
-                                .child(list.len().to_string()),
+                                .child(text(list.len().to_string())),
                         ),
                 )
                 .child(rows);
@@ -1069,7 +1085,7 @@ impl GigapairApp {
 
     fn render_contact_page(&mut self, node_id: &str, cx: &mut Context<Self>) -> AnyElement {
         let Some(c) = self.contacts.iter().find(|c| c.node_id == node_id).cloned() else {
-            return div().child(s::SELECT_CONTACT).into_any_element();
+            return div().child(text(s::SELECT_CONTACT)).into_any_element();
         };
         let p = Palette::get(cx);
         let (id_files, id_folder, id_drop) =
@@ -1209,7 +1225,7 @@ impl GigapairApp {
                     .flex_shrink_0()
                     .text_size(px(12.))
                     .text_color(p.ink_2)
-                    .child(if c.online { s::ONLINE } else { s::OFFLINE }),
+                    .child(text(if c.online { s::ONLINE } else { s::OFFLINE })),
             )
             .child(
                 div()
@@ -1268,7 +1284,7 @@ impl GigapairApp {
             .child(
                 div()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(s::CONFIRM_TITLE),
+                    .child(text(s::CONFIRM_TITLE)),
             )
             .child(div().text_size(px(12.)).opacity(0.75).child(format!(
                 "{}: {}",
@@ -1279,7 +1295,10 @@ impl GigapairApp {
                 div()
                     .font_family(style::FONT_WIDE)
                     .text_size(px(22.))
-                    .child(pp.fingerprint.to_uppercase()),
+                    .child(selectable(
+                        format!("fingerprint-{}", pp.id),
+                        pp.fingerprint.to_uppercase(),
+                    )),
             );
         if let Some(input) = &input {
             card = card.child(
@@ -1400,7 +1419,7 @@ impl GigapairApp {
                                         .bg(p.sunken)
                                         .font_family(cx.theme().mono_font_family.clone())
                                         .text_size(px(12.))
-                                        .child(code.replace('-', " ")),
+                                        .child(text(code.replace('-', " "))),
                                 )
                                 .child(
                                     h_flex()
@@ -1421,14 +1440,14 @@ impl GigapairApp {
                                                 .text_size(px(12.))
                                                 .text_color(p.ink_3)
                                                 .font_features(tabular())
-                                                .child(s::expires_in(left)),
+                                                .child(text(s::expires_in(left))),
                                         ),
                                 )
                                 .child(
                                     div()
                                         .text_size(px(12.))
                                         .text_color(p.ink_2)
-                                        .child(s::WAITING_OTHER),
+                                        .child(text(s::WAITING_OTHER)),
                                 ),
                         ),
                 );
@@ -1566,7 +1585,7 @@ impl GigapairApp {
                     .text_size(px(12.))
                     .text_color(p.ink_3)
                     .font_features(tabular())
-                    .child(when),
+                    .child(selectable(format!("when-{}", t.id), when)),
             )
             .child(
                 div()
@@ -1592,7 +1611,7 @@ impl GigapairApp {
         let meta = div()
             .text_size(px(12.))
             .text_color(p.ink_2)
-            .child(s::HISTORY_META);
+            .child(text(s::HISTORY_META));
         let mut col = v_flex().gap(px(10.)).child(page_head(
             s::HISTORY,
             Some(meta.into_any_element()),
@@ -1605,7 +1624,7 @@ impl GigapairApp {
                     div()
                         .text_size(px(12.))
                         .text_color(p.ink_3)
-                        .child(s::NO_HISTORY),
+                        .child(text(s::NO_HISTORY)),
                 )
                 .into_any_element();
         }
@@ -1625,7 +1644,7 @@ impl GigapairApp {
                         .mt(px(10.))
                         .text_size(px(12.))
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child(date.map(|d| day_label(d, today)).unwrap_or_default()),
+                        .child(text(date.map(|d| day_label(d, today)).unwrap_or_default())),
                 );
                 rows = Some(v_flex().border_b_1().border_color(p.line));
             }
@@ -1696,9 +1715,14 @@ impl GigapairApp {
                 .mt(px(6.))
                 .text_size(px(12.))
                 .font_weight(FontWeight::SEMIBOLD)
-                .child(text)
+                .child(self::text(text))
         };
-        let note = |text: &'static str| div().text_size(px(12.)).text_color(p.ink_3).child(text);
+        let note = |text: &'static str| {
+            div()
+                .text_size(px(12.))
+                .text_color(p.ink_3)
+                .child(self::text(text))
+        };
         let download = self
             .status
             .as_ref()
@@ -1833,7 +1857,7 @@ impl GigapairApp {
                         .border_color(p.line)
                         .text_size(px(12.))
                         .text_color(p.ink_2)
-                        .children(s::RELAY_INFO.iter().map(|para| div().child(*para))),
+                        .children(s::RELAY_INFO.iter().map(|para| div().child(text(*para)))),
                 )
             })
             .child(switch(
@@ -1877,11 +1901,11 @@ impl GigapairApp {
                 h_flex()
                     .gap(px(6.))
                     .child(
-                        div().flex_1().min_w_0().truncate().child(
+                        div().flex_1().min_w_0().truncate().child(text(
                             logs.as_ref()
                                 .map(|p| p.display().to_string())
                                 .unwrap_or_default(),
-                        ),
+                        )),
                     )
                     .child(
                         Button::new("open-logs")
@@ -1897,7 +1921,12 @@ impl GigapairApp {
             )
             .child(note(s::LOGS_NOTE))
             .child(label(s::SETTINGS_NODE))
-            .child(div().text_size(px(11.5)).text_color(p.ink_3).child(node))
+            .child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(p.ink_3)
+                    .child(text(node)),
+            )
             .child(label(s::SETTINGS_RESET))
             .child(note(s::RESET_NOTE))
             .child(h_flex().child(self.reset_button(cx)))
@@ -1933,10 +1962,10 @@ impl Render for GigapairApp {
                     .bg(p.sunken)
                     .text_size(px(12.))
                     .text_color(p.ink_2)
-                    .child(match &self.last_error {
+                    .child(text(match &self.last_error {
                         Some(e) => format!("{} ({e})", s::CONNECTING_SERVICE),
                         None => s::CONNECTING_SERVICE.to_owned(),
-                    }),
+                    })),
             );
         }
         if let Some(relay) = self.relay_banner.clone() {
@@ -1954,13 +1983,13 @@ impl Render for GigapairApp {
                             .gap(px(8.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(glyph(style::icon::LINK_RELAY, 18., p.ink))
-                            .child(format!("{} ({relay})", s::RELAY_SLOWER)),
+                            .child(text(format!("{} ({relay})", s::RELAY_SLOWER))),
                     )
                     .child(
                         div()
                             .text_size(px(12.))
                             .text_color(p.ink_2)
-                            .child(RELAY_NOTICE),
+                            .child(text(RELAY_NOTICE)),
                     )
                     .child(
                         h_flex().child(Button::new("dismiss-relay").label(s::DISMISS).on_click(
@@ -1976,6 +2005,19 @@ impl Render for GigapairApp {
         main = main.child(div().w_full().max_w(px(1100.)).child(page));
 
         h_flex()
+            .id("window-root")
+            // A plain click anywhere clears the text selection. gpui-base
+            // only does this while its mouse-up handler keeps seeing the
+            // release, which inputs and buttons stop; after clicking one,
+            // a selection would otherwise stay until the next drag.
+            .capture_any_mouse_down(|event, window, cx| {
+                if event.button == MouseButton::Left
+                    && event.click_count == 1
+                    && !event.modifiers.shift
+                {
+                    TextSelection::clear(window, cx);
+                }
+            })
             .size_full()
             .bg(p.bg)
             .text_color(p.ink)
@@ -2041,7 +2083,7 @@ fn small_label(text: &'static str, p: &Palette) -> Div {
         .text_size(px(11.5))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(p.ink_3)
-        .child(text)
+        .child(self::text(text))
 }
 
 /// A clickable row in the sidebar.
@@ -2098,8 +2140,17 @@ fn section(title: &'static str, text: &'static str, p: &Palette) -> Div {
         .bg(p.surface)
         .border_1()
         .border_color(p.line)
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
-        .child(div().text_size(px(12.)).text_color(p.ink_2).child(text))
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(self::text(title)),
+        )
+        .child(
+            div()
+                .text_size(px(12.))
+                .text_color(p.ink_2)
+                .child(self::text(text)),
+        )
 }
 
 /// "Direct" or "Via relay use1-1", with the full relay host on hover.
@@ -2124,7 +2175,7 @@ fn conn_tag(id: &str, c: &ConnInfo, p: &Palette) -> AnyElement {
         .font_weight(FontWeight::MEDIUM)
         .text_color(p.ink_2)
         .child(svg().path(icon).w(px(18.)).h(px(7.)).text_color(p.ink_2))
-        .child(label);
+        .child(selectable(format!("conn-label-{id}"), label));
     match host {
         Some(host) => tag
             .tooltip(move |window, cx| Tooltip::new(host.clone()).build(window, cx))
@@ -2171,6 +2222,19 @@ fn strip(percent: f64, mode: StripMode, p: &Palette) -> Div {
             };
             div().flex_1().h_full().rounded(px(1.5)).bg(color)
         }))
+}
+
+/// Text that can be selected with the mouse and copied, identified by
+/// where it is written and what it says. For text repeated per row (one
+/// call site, several equal texts) use [`selectable`] with the row's id.
+#[track_caller]
+fn text(content: impl Into<SharedString>) -> SelectableText {
+    let content = content.into();
+    let at = std::panic::Location::caller();
+    selectable(
+        format!("text-{}:{}-{content}", at.line(), at.column()),
+        content,
+    )
 }
 
 /// Text the user can select with the mouse and copy (Ctrl+C, Cmd+C).
