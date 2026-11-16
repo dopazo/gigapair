@@ -1,0 +1,58 @@
+# Custom job: wraps the Linux archive into a .deb and an .rpm with nfpm.
+# Called from release.yml after the local artifacts are built. release.yml is
+# edited by hand (see allow-dirty in dist-workspace.toml): keep this job listed
+# there and in the `needs` and `if` of `host`.
+name: Build Linux packages
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+env:
+  NFPM_VERSION: 2.49.0
+
+jobs:
+  packages:
+    runs-on: ubuntu-22.04
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Fetch the built archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: artifacts-build-local-*
+          path: dist-in/
+          merge-multiple: true
+      - name: Install nfpm
+        run: |
+          base="https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}"
+          curl -fsSLO "$base/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+          curl -fsSLO "$base/nfpm_${NFPM_VERSION}_checksums.txt"
+          grep "nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" "nfpm_${NFPM_VERSION}_checksums.txt" | sha256sum -c -
+          sudo tar -xzf "nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" -C /usr/local/bin nfpm
+      - name: Build the packages
+        env:
+          PLAN: ${{ inputs.plan }}
+        run: |
+          version=$(echo "$PLAN" | jq -r '.announcement_tag' | sed 's/^v//')
+          scripts/linux-packages.sh dist-in/gigapair-x86_64-unknown-linux-gnu.tar.xz "$version" dist-out
+          (cd dist-out && for f in *.deb *.rpm; do sha256sum "$f" > "$f.sha256"; done)
+      - name: Attest
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist-out/*.deb
+            dist-out/*.rpm
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: artifacts-build-linux-packages
+          path: dist-out/*
