@@ -1,0 +1,74 @@
+# deb and rpm packages of Gigapair, built from the Linux archive that dist
+# produces (scripts/linux-packages.sh). ${VERSION} and ${STAGE} are filled in by the script.
+name: gigapair
+arch: amd64
+platform: linux
+# semver: 0.1.0-beta.3 becomes 0.1.0~beta.3 in a deb, so it sorts before 0.1.0.
+version: ${VERSION}
+version_schema: semver
+section: net
+priority: optional
+maintainer: Gigapair contributors <noreply@users.noreply.github.com>
+description: |-
+  Send very large files directly between paired devices
+  Gigapair moves files of 50 GB and more between paired devices: end-to-end
+  encrypted, verified with BLAKE3 and resumable. It includes the desktop app,
+  the command line (gigapair, gpair) and the background service (gigapaird).
+homepage: https://github.com/dopazo/gigapair
+license: MIT
+
+contents:
+  - src: ${STAGE}/gigapair-app
+    dst: /usr/bin/gigapair-app
+    file_info: { mode: 0755 }
+  - src: ${STAGE}/gigapaird
+    dst: /usr/bin/gigapaird
+    file_info: { mode: 0755 }
+  - src: ${STAGE}/gigapair
+    dst: /usr/bin/gigapair
+    file_info: { mode: 0755 }
+  - src: ${STAGE}/gpair
+    dst: /usr/bin/gpair
+    file_info: { mode: 0755 }
+  - src: packaging/linux/dev.gigapair.Gigapair.desktop
+    dst: /usr/share/applications/dev.gigapair.Gigapair.desktop
+    file_info: { mode: 0644 }
+  - src: packaging/linux/dev.gigapair.Gigapair.png
+    dst: /usr/share/icons/hicolor/256x256/apps/dev.gigapair.Gigapair.png
+    file_info: { mode: 0644 }
+  - src: ${STAGE}/LICENSE
+    dst: /usr/share/doc/gigapair/copyright
+    packager: deb
+    file_info: { mode: 0644 }
+  - src: ${STAGE}/LICENSE
+    dst: /usr/share/licenses/gigapair/LICENSE
+    packager: rpm
+    file_info: { mode: 0644 }
+  - src: ${STAGE}/README.md
+    dst: /usr/share/doc/gigapair/README.md
+    file_info: { mode: 0644 }
+
+scripts:
+  preremove: packaging/linux/prerm.sh
+
+# Runtime libraries (GPUI loads Vulkan, Wayland and fontconfig on its own, so
+# `ldd` does not show them). Package names differ per family.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.35)
+      - libxcb1
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+      - libvulkan1
+      - libwayland-client0
+      - libfontconfig1
+  rpm:
+    depends:
+      - glibc >= 2.35
+      - libxcb
+      - libxkbcommon
+      - libxkbcommon-x11
+      - vulkan-loader
+      - libwayland-client
+      - fontconfig

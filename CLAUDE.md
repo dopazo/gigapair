@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Gigapair is a peer-to-peer app for moving very large files (50–200+ GB) between paired devices: end-to-end encrypted, BLAKE3-verified and resumable. Rust workspace, GPUI desktop UI, CLI, and a background service.
 
 - Full product spec: `spec_gigapair.md` (in Spanish). It is the source of truth for scope, requirements (RF-xx / RNF-xx) and stage plan. Cite requirement IDs in commits and PRs when relevant.
-- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution): minimal release pipeline with dist (see `docs/releasing.md`); the macOS DMG/`.app` is built in CI (`scripts/macos-bundle.sh`, `.github/workflows/build-dmg.yml`; untested on a real Mac until the first tag), AppImage/`.deb`, other channels, the system-wide service and the update notice come later.
+- Current stage: stages 1–3 implemented (core, service, CLI, GPUI app, tray); the stage 1 real-network acceptance test (50 GB Windows↔macOS with two cuts) is pending a manual run. Stage 4 (distribution): minimal release pipeline with dist (see `docs/releasing.md`); the macOS DMG/`.app` is built in CI (`scripts/macos-bundle.sh`, `.github/workflows/build-dmg.yml`; untested on a real Mac until the first tag), the Linux `.deb`/`.rpm` (`scripts/linux-packages.sh`, `packaging/linux/`, `.github/workflows/build-linux-packages.yml`; built and install/remove tested for the deb on Ubuntu in WSL, the rpm only inspected), AppImage/Flatpak, other channels, the system-wide service and the update notice come later.
 
 ## Architecture
 
@@ -116,7 +116,7 @@ Dont try to search for >200 gb files unless asked, you will test it when the tim
 
 1. Manual acceptance test of stage 1 across two real networks (one behind CGNAT) with relays; check `direct`/`relay` labelling and the first-relay notice.
 2. Tray (RF-14): implemented in `gigapair-app` (`shell.rs`, `tray/`, `single.rs`). Verified on Linux only; the Windows code is cross-checked (`cargo check --target x86_64-pc-windows-gnu`) but not run, macOS is compiled in CI but untested. The tray icon is the G mark drawn in `icon.rs`; on Windows the `.exe`, window and MSI use `crates/gigapair/assets/gigapair.ico` (embedded by `build.rs`). Pending: macOS manual test, the stage 3 reboot test, macOS/Linux app icon.
-3. Distribution follow-ups: AppImage, `.deb`, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); "new release available" notice (must respect no-telemetry: opt-in or clearly explained). The release pipeline has never run: the first tag is its test.
+3. Distribution follow-ups: AppImage, Flatpak (the CLI on the host needs the service socket inside the sandbox), AUR package, winget/Scoop/Homebrew, crates.io; real icon; system-wide service variants (Windows Service, Linux system unit with dedicated user, `/etc/gigapair`); "new release available" notice (must respect no-telemetry: opt-in or clearly explained). The release pipeline has never run: the first tag is its test.
 4. Relay: the first-use notice is emitted once per install; the app shows it as a banner, the CLI prints it during `send`.
 5. No LAN discovery (iroh 1.4 has no mDNS); contacts rely on n0 DNS (relay URL only) plus stored addresses and a stable UDP port.
 6. Ticket sends to non-contacts (RF-16) not implemented.

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Gigapair
+GenericName=File transfer
+Comment=Send very large files directly between paired devices
+Exec=gigapair-app
+Icon=dev.gigapair.Gigapair
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=transfer;send;share;p2p;files;
+StartupWMClass=dev.gigapair.Gigapair
