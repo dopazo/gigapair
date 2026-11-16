@@ -829,7 +829,7 @@ impl GigapairApp {
                     .gap(px(2.))
                     .child(
                         div()
-                            .truncate()
+                            .line_clamp(1)
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if waiting { p.ink_2 } else { p.ink })
                             .child(selectable(format!("label-{}", t.id), t.label.clone())),
@@ -950,7 +950,7 @@ impl GigapairApp {
                     .child(
                         div()
                             .min_w_0()
-                            .truncate()
+                            .line_clamp(1)
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(selectable(format!("label-{}", t.id), t.label.clone())),
                     )
@@ -1198,9 +1198,7 @@ impl GigapairApp {
                     .flex_1()
                     .min_w_0()
                     .font_weight(FontWeight::SEMIBOLD)
-                    // One line, like the other selectable labels: selecting
-                    // it while it wrapped looked laggy.
-                    .truncate()
+                    .line_clamp(1)
                     .child(selectable("drop-hint", s::drop_hint(&c.name))),
             )
             .child(
@@ -1234,7 +1232,7 @@ impl GigapairApp {
             .child(
                 div()
                     .min_w_0()
-                    .truncate()
+                    .line_clamp(1)
                     .text_size(px(11.5))
                     .text_color(p.ink_3)
                     .child(selectable("contact-node-id", c.node_id.clone())),
@@ -1536,7 +1534,7 @@ impl GigapairApp {
                     .gap(px(2.))
                     .child(
                         div()
-                            .truncate()
+                            .line_clamp(1)
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(selectable(format!("label-{}", t.id), t.label.clone())),
                     )
@@ -1752,7 +1750,7 @@ impl GigapairApp {
             .child(
                 h_flex()
                     .gap(px(6.))
-                    .child(div().flex_1().min_w_0().truncate().child(text(download)))
+                    .child(div().flex_1().min_w_0().line_clamp(1).child(text(download)))
                     .child(Button::new("change-download").label(s::CHANGE).on_click(
                         cx.listener(|app, _, window, cx| app.choose_download_dir(window, cx)),
                     )),
@@ -1905,7 +1903,7 @@ impl GigapairApp {
                 h_flex()
                     .gap(px(6.))
                     .child(
-                        div().flex_1().min_w_0().truncate().child(text(
+                        div().flex_1().min_w_0().line_clamp(1).child(text(
                             logs.as_ref()
                                 .map(|p| p.display().to_string())
                                 .unwrap_or_default(),
@@ -2169,7 +2167,7 @@ fn page_head(
                         .text_size(px(18.))
                         .line_height(px(22.))
                         .text_color(p.ink)
-                        .truncate()
+                        .line_clamp(1)
                         .child(selectable("page-title", title.to_owned())),
                 )
                 .children(meta),
@@ -2284,6 +2282,9 @@ fn text(content: impl Into<SharedString>) -> SelectableText {
 }
 
 /// Text the user can select with the mouse and copy (Ctrl+C, Cmd+C).
+///
+/// To keep it to one line with an ellipsis, use `.line_clamp(1)` on its
+/// container, not `.truncate()`: gpui-base can't select truncated text.
 fn selectable(id: impl Into<SharedString>, text: impl Into<SharedString>) -> SelectableText {
     SelectableText::new(id.into(), text)
 }
