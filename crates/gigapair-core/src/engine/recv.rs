@@ -344,20 +344,23 @@ enum DlError {
     Fatal(String),
 }
 
+/// Waits for one of the `max_parallel_downloads` slots. `None` if stopped.
+async fn download_slot(
+    inner: &Arc<Inner>,
+    id: &str,
+    token: &CancellationToken,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    if let Ok(p) = inner.download_slots.clone().try_acquire_owned() {
+        return Some(p);
+    }
+    inner.set_note(id, Some("Waiting for other transfers to finish".into()));
+    tokio::select! {
+        _ = token.cancelled() => None,
+        p = inner.download_slots.clone().acquire_owned() => p.ok(),
+    }
+}
+
 async fn download_task(inner: &Arc<Inner>, id: &str, token: &CancellationToken) {
-    let permit = match inner.download_slots.clone().try_acquire_owned() {
-        Ok(p) => p,
-        Err(_) => {
-            inner.set_note(id, Some("Waiting for other transfers to finish".into()));
-            tokio::select! {
-                _ = token.cancelled() => return,
-                p = inner.download_slots.clone().acquire_owned() => match p {
-                    Ok(p) => p,
-                    Err(_) => return,
-                },
-            }
-        }
-    };
     let wake = inner.wake_handle(id);
     let mut backoff = Backoff::new();
     let mut integrity_failures = 0;
@@ -365,8 +368,14 @@ async fn download_task(inner: &Arc<Inner>, id: &str, token: &CancellationToken) 
         if token.is_cancelled() {
             break;
         }
+        // The slot is held only while data can move: a transfer waiting for
+        // an offline or paused contact must not hold up the others.
+        let Some(permit) = download_slot(inner, id, token).await else {
+            break;
+        };
         let before = inner.db.transfer(id).ok().flatten().map(|r| r.done_bytes);
         let result = run(inner, id, token).await;
+        drop(permit);
         let after = inner.db.transfer(id).ok().flatten().map(|r| r.done_bytes);
         if after > before {
             backoff.reset();
@@ -429,7 +438,6 @@ async fn download_task(inner: &Arc<Inner>, id: &str, token: &CancellationToken) 
         }
     }
     inner.flush_progress(id);
-    drop(permit);
 }
 
 fn requeue(inner: &Arc<Inner>, id: &str, row: &TransferRow) {
