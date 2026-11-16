@@ -11,6 +11,7 @@ pub mod logging;
 pub mod manifest;
 pub mod pairing;
 pub mod paths;
+pub mod reset;
 pub mod service;
 pub mod types;
 pub mod wire;

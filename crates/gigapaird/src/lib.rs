@@ -210,6 +210,13 @@ async fn serve_client(
                 stop.notify_one();
                 return Ok(());
             }
+            Request::Reset => {
+                tracing::info!("deleting this device's data: forgetting contacts and stopping");
+                engine.forget_all().await;
+                conn.send(&Response::Ok).await?;
+                stop.notify_one();
+                return Ok(());
+            }
             Request::Hello { .. } => {
                 conn.send(&Response::Error {
                     message: "already connected".into(),

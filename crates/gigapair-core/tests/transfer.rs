@@ -601,6 +601,35 @@ async fn contacts_with_the_same_name_stay_apart() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reset_makes_contacts_forget_this_device() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = start(&tmp.path().join("a"), |_| {}).await;
+    let b = start(&tmp.path().join("b"), |_| {}).await;
+    pair(&a, &b, "bob", "alice").await;
+    let mut events = a.subscribe();
+
+    a.forget_all().await;
+
+    assert!(
+        b.contacts().unwrap().is_empty(),
+        "b still has a as a contact"
+    );
+    let reset = tokio::time::timeout(TIMEOUT, async {
+        loop {
+            if let Ok(Event::Reset) = events.recv().await {
+                return;
+            }
+        }
+    })
+    .await;
+    assert!(reset.is_ok(), "no Reset event");
+
+    for e in [a, b] {
+        e.shutdown().await;
+    }
+}
+
 /// Manual throughput check: `GIGAPAIR_TEST_MB=4096 cargo test --release
 /// -p gigapair-core --test transfer throughput -- --ignored --nocapture`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

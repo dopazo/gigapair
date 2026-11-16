@@ -11,8 +11,8 @@ use crate::types::{Contact, Direction, TransferInfo, TransferStatus, short_id};
 use crate::wire::{Notice, PROTOCOL_VERSION, PeerRequest};
 
 impl super::Engine {
-    /// Handles one client request. `Hello`, `Subscribe` and `Shutdown` are
-    /// connection-level and handled by the service.
+    /// Handles one client request. `Hello`, `Subscribe`, `Shutdown` and
+    /// `Reset` are connection-level and handled by the service.
     pub async fn handle(&self, req: Request) -> Response {
         match self.inner.handle(req).await {
             Ok(r) => r,
@@ -39,12 +39,50 @@ impl super::Engine {
     pub fn contacts(&self) -> EngineResult<Vec<Contact>> {
         self.inner.contacts()
     }
+
+    /// Before this device's data is deleted: cancels every transfer and
+    /// asks each contact to forget this device, waiting a few seconds at
+    /// most, so contacts don't keep one that will never answer again. Then
+    /// tells clients ([`Event::Reset`]) not to start the service again.
+    pub async fn forget_all(&self) {
+        let inner = &self.inner;
+        for row in inner.db.active_transfers().unwrap_or_default() {
+            inner.stop_task(&row.id);
+            let _ = inner
+                .db
+                .set_error(&row.id, Some("This device's data was deleted"));
+            inner.set_note(&row.id, None);
+            inner.set_status(&row.id, TransferStatus::Cancelled);
+            if row.direction == Direction::Receive {
+                recv::cleanup_partial(&row);
+            }
+        }
+        let mut unpairs = tokio::task::JoinSet::new();
+        for c in inner.contacts().unwrap_or_default() {
+            let Ok(peer) = c.node_id.parse::<iroh::EndpointId>() else {
+                continue;
+            };
+            let inner = inner.clone();
+            unpairs.spawn(async move {
+                let sent = tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    inner.request(peer, &PeerRequest::Unpair),
+                )
+                .await;
+                if !matches!(sent, Ok(Ok(_))) {
+                    tracing::info!(peer = %peer.fmt_short(), "could not tell a contact to forget this device");
+                }
+            });
+        }
+        while unpairs.join_next().await.is_some() {}
+        inner.emit(Event::Reset);
+    }
 }
 
 impl Inner {
     async fn handle(self: &Arc<Self>, req: Request) -> EngineResult<Response> {
         Ok(match req {
-            Request::Hello { .. } | Request::Subscribe | Request::Shutdown => {
+            Request::Hello { .. } | Request::Subscribe | Request::Shutdown | Request::Reset => {
                 return Err(EngineError::user("not supported here"));
             }
             Request::Status => Response::Status(self.status()),

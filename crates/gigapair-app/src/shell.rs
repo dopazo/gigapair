@@ -196,6 +196,14 @@ fn on_backend(msg: BackendMsg, cx: &mut App) {
             shell.transfers.clear();
         }
         BackendMsg::Event(ev) => {
+            if **ev == Event::Reset && !crate::backend::resetting_here() {
+                // This device's data is being deleted (by the CLI or the
+                // window): nothing is left to show, and staying would start
+                // a new service.
+                tracing::info!("this device's data is being deleted; quitting");
+                cx.quit();
+                return;
+            }
             if let Event::Transfer(t) | Event::IncomingRequest(t) = &**ev {
                 if t.status.is_terminal() {
                     shell.transfers.remove(&t.id);

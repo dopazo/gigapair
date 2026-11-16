@@ -4,6 +4,7 @@
 //! channels; service events arrive on another channel. Both reconnect
 //! (starting the service if needed) when the service restarts.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use gigapair_core::api::{Event, Request, Response};
@@ -18,6 +19,19 @@ pub enum BackendMsg {
 }
 
 type Job = (Request, oneshot::Sender<Result<Response, String>>);
+
+/// Set once this device's data is being deleted: from then on nothing may
+/// start the service again (that would create a new identity).
+static RESETTING: AtomicBool = AtomicBool::new(false);
+
+/// Set while this app runs the reset itself: it must stay open until the
+/// data is deleted, even though the service announces the reset first.
+static LOCAL_RESET: AtomicBool = AtomicBool::new(false);
+
+/// Whether this app started the reset in progress.
+pub fn resetting_here() -> bool {
+    LOCAL_RESET.load(Ordering::SeqCst)
+}
 
 #[derive(Clone)]
 pub struct Backend {
@@ -66,6 +80,30 @@ impl Backend {
 async fn requests_loop(dirs: AppDirs, mut rx: mpsc::UnboundedReceiver<Job>) {
     let mut client: Option<Client> = None;
     while let Some((req, reply)) = rx.recv().await {
+        if req == Request::Reset {
+            LOCAL_RESET.store(true, Ordering::SeqCst);
+            RESETTING.store(true, Ordering::SeqCst);
+            client = None;
+            let result = match gigapair_core::reset::reset_device(&dirs).await {
+                Ok(left) => {
+                    if !left.is_empty() {
+                        tracing::warn!(?left, "some of Gigapair's data could not be deleted");
+                    }
+                    Ok(Response::Ok)
+                }
+                Err(e) => {
+                    RESETTING.store(false, Ordering::SeqCst);
+                    LOCAL_RESET.store(false, Ordering::SeqCst);
+                    Err(e.to_string())
+                }
+            };
+            let _ = reply.send(result);
+            continue;
+        }
+        if RESETTING.load(Ordering::SeqCst) {
+            let _ = reply.send(Err(DATA_DELETED.into()));
+            continue;
+        }
         let mut result = Err(String::new());
         // One retry with a fresh connection if the service restarted.
         for _attempt in 0..2 {
@@ -98,8 +136,13 @@ async fn requests_loop(dirs: AppDirs, mut rx: mpsc::UnboundedReceiver<Job>) {
     }
 }
 
+const DATA_DELETED: &str = "Gigapair's data was deleted from this device";
+
 async fn events_loop(dirs: AppDirs, tx: mpsc::UnboundedSender<BackendMsg>) {
     loop {
+        if RESETTING.load(Ordering::SeqCst) {
+            return;
+        }
         match ipc::connect_or_spawn(&dirs, "app-events").await {
             Ok((client, _)) => match client.subscribe().await {
                 Ok(mut events) => {
@@ -109,6 +152,10 @@ async fn events_loop(dirs: AppDirs, tx: mpsc::UnboundedSender<BackendMsg>) {
                     loop {
                         match events.next_event().await {
                             Ok(ev) => {
+                                if ev == Event::Reset {
+                                    // Another client (the CLI) is deleting the data.
+                                    RESETTING.store(true, Ordering::SeqCst);
+                                }
                                 if tx.send(BackendMsg::Event(Box::new(ev))).is_err() {
                                     return;
                                 }

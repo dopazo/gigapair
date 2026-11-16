@@ -36,6 +36,7 @@
 | `gigapair service install` / `uninstall` | Start the service at login (and now) / stop doing so |
 | `gigapair service start` / `stop` / `status` | Start, stop or check the service |
 | `gigapair logs` | The logs folder and its newest files |
+| `gigapair reset [--yes]` | Delete everything Gigapair keeps on this device: contacts, identity, history, settings, logs and the start at login; contacts are told to forget it. Received files stay. Irreversible: every contact must pair again. Without a terminal it needs `--yes` |
 | `gigapair --version` | The version |
 
 `service` and `logs` work without a running service; every other command connects to it, starting it if needed.

@@ -132,7 +132,7 @@ Auto-accept lets that contact write to this disk without asking: set it only bec
 
 If instead it fails with `... is older than this program ... and restarting it didn't help`, an old `gigapaird` is still installed (a partial copy, or two installs on the `PATH`): install Gigapair again, and check that `gigapair --version` and `gigapaird --version` match.
 
-**Remove:** first `gigapair service uninstall` and `gigapair service stop`, then:
+**Remove:** first `gigapair service uninstall` and `gigapair service stop` (or, if the user also wants their data gone, `gigapair reset`, which does both and deletes the data; ask first, it can't be undone), then:
 
 | Installed with | Remove with |
 | --- | --- |
@@ -141,7 +141,7 @@ If instead it fails with `... is older than this program ... and restarting it d
 | `.deb` / `.rpm` | `sudo apt remove gigapair` / `sudo dnf remove gigapair` |
 | Shell or PowerShell installer | Delete `gigapair`, `gpair`, `gigapaird` and `gigapair-app` from `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin`) |
 
-This keeps contacts, settings, this device's identity and received files (see [Where data lives](#where-data-lives)). Delete them only if the user asks; pairing again is needed afterwards.
+Uninstalling keeps contacts, settings, this device's identity and received files (see [Where data lives](#where-data-lives)), so a reinstall or an update keeps working. To delete them, run `gigapair reset` before uninstalling, only if the user asks; pairing again is needed afterwards. Received files are never deleted by Gigapair.
 
 ## Where data lives
 

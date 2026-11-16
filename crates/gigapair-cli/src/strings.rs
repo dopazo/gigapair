@@ -119,5 +119,21 @@ pub fn service_status(installed: bool, location: Option<&str>, running: bool) ->
     )
 }
 
+pub fn reset_intro(downloads: &str) -> String {
+    format!(
+        "This deletes everything Gigapair keeps on this device: your contacts, this device's identity, the transfer history and queue, the settings and the logs. Transfers in progress are cancelled, your contacts are told to forget this device, and Gigapair stops starting at login.
+Received files are kept (by default in {downloads}).
+To use Gigapair again afterwards, every contact must pair again."
+    )
+}
+
+pub const RESET_QUESTION: &str = "Type delete to confirm: ";
+pub const RESET_NEED_TTY_OR_YES: &str =
+    "can't ask for confirmation without a terminal; pass --yes to delete this device's data";
+pub const RESET_CANCELLED: &str = "Nothing was deleted.";
+pub const RESET_DONE: &str =
+    "Gigapair's data was deleted from this device. You can uninstall Gigapair now.";
+pub const RESET_PARTIAL: &str = "Gigapair's data was deleted, except for these (probably in use by another program, such as the desktop app; delete them by hand):";
+
 pub const NO_LOGS: &str = "No log files yet.";
 pub const LOGS_HINT: &str = "Newest first. Attach these files when reporting a problem; they contain no keys or pairing codes.";

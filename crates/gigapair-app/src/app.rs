@@ -59,6 +59,9 @@ pub struct GigapairApp {
     /// The "What is a relay?" panel in the settings is open.
     relay_info_open: bool,
     remove_armed: bool,
+    /// "Delete this device's data" was clicked once; the next click deletes.
+    reset_armed: bool,
+    resetting: bool,
     /// The contact page shows the rename field.
     renaming: bool,
     start_at_login: Option<bool>,
@@ -116,6 +119,8 @@ impl GigapairApp {
             relay_banner: None,
             relay_info_open: false,
             remove_armed: false,
+            reset_armed: false,
+            resetting: false,
             renaming: false,
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
             logs_dir: AppDirs::from_env().ok().map(|d| d.logs),
@@ -346,6 +351,8 @@ impl GigapairApp {
             Event::Notice { message } => {
                 window.push_notification(Notification::info(message), cx);
             }
+            // The shell quits the app.
+            Event::Reset => {}
         }
         cx.notify();
     }
@@ -1631,6 +1638,44 @@ impl GigapairApp {
         col.into_any_element()
     }
 
+    /// Deletes this device's data after a second click, then quits.
+    fn reset_button(&mut self, cx: &mut Context<Self>) -> Button {
+        let p = Palette::get(cx);
+        let label = if self.resetting {
+            s::RESETTING
+        } else if self.reset_armed {
+            s::RESET_CONFIRM
+        } else {
+            s::RESET
+        };
+        Button::new("reset-device")
+            .label(label)
+            .disabled(self.resetting)
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(gpui_kit::transparent_black())
+                    .foreground(p.danger)
+                    .hover(p.danger.opacity(0.1))
+                    .active(p.danger.opacity(0.18))
+                    .shadow(false),
+            )
+            .on_click(cx.listener(|app, _, window, cx| {
+                if !app.reset_armed {
+                    app.reset_armed = true;
+                    cx.notify();
+                    return;
+                }
+                app.reset_armed = false;
+                app.resetting = true;
+                tracing::info!("deleting this device's data from the app");
+                cx.notify();
+                app.call(Request::Reset, window, cx, |_, _, _, cx| {
+                    tracing::info!("this device's data was deleted; quitting");
+                    cx.quit();
+                });
+            }))
+    }
+
     fn render_settings(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::get(cx);
         let switch = |id: &'static str,
@@ -1853,6 +1898,9 @@ impl GigapairApp {
             .child(note(s::LOGS_NOTE))
             .child(label(s::SETTINGS_NODE))
             .child(div().text_size(px(11.5)).text_color(p.ink_3).child(node))
+            .child(label(s::SETTINGS_RESET))
+            .child(note(s::RESET_NOTE))
+            .child(h_flex().child(self.reset_button(cx)))
             .into_any_element()
     }
 }
