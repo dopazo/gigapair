@@ -83,15 +83,15 @@ gigapair status --watch               # progress, speed, direct or relay
 
 All commands, headless servers, settings, where data is stored and logs: [docs/usage.md](docs/usage.md).
 
-### Use Gigapair from Claude Code
+### Use Gigapair from AI agents
 
-A skill is a set of instructions that Claude Code reads when a task needs it. The [Gigapair skill](skills/gigapair/SKILL.md) teaches Claude how to install Gigapair, send and receive files with the CLI, and fix common problems. Once it is installed, you can ask things like:
+The [Gigapair skill](skills/gigapair/SKILL.md) teaches an agent how to install Gigapair, send and receive files with the CLI, and fix common problems. Once it is installed, you can ask things like:
 
 - *"Install Gigapair on this computer."*
 - *"Send ~/Videos/wedding to my NAS with Gigapair and tell me when it's done."*
 - *"My Gigapair transfer is slow and says 'via relay'. Why?"*
 
-To install it, open a terminal and run **one** of these commands. Each downloads this repository from GitHub and copies only the skill's folder into Claude Code's skills folder.
+To install it, open a terminal and run **one** of these commands. Each downloads this repository from GitHub and copies only the skill's folder into your skills folder. The commands use `.claude` (Claude Code); if your harness reads skills from `.agents`, replace `.claude` with `.agents` in the command.
 
 **macOS or Linux, for all your projects:**
 
@@ -117,7 +117,7 @@ New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null; curl.exe 
 New-Item -ItemType Directory -Force ".claude\skills" | Out-Null; curl.exe -fsSL -o "$env:TEMP\gigapair-src.tar.gz" https://github.com/dopazo/gigapair/archive/refs/heads/main.tar.gz; tar -xzf "$env:TEMP\gigapair-src.tar.gz" -C ".claude\skills" --strip-components=2 gigapair-main/skills/gigapair
 ```
 
-To check it, type `/skills` in Claude Code: **gigapair** should be in the list. If you had no skills folder before, run `/reload-skills` once (or start a new session). To update, run the same command again. To remove, delete the `gigapair` folder inside `.claude/skills`.
+**gigapair** should then appear in your agent's skill list (in Claude Code, `/skills`; if you had no skills folder before, run `/reload-skills` or start a new session). To update, run the same command again. To remove, delete the `gigapair` folder inside the skills folder.
 
 ## More
 
