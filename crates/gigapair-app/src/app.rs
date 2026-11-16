@@ -820,51 +820,44 @@ impl GigapairApp {
             amount_parts(None, t.total_bytes)
         };
 
-        let row = h_flex()
-            .gap(px(14.))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap(px(2.))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if waiting { p.ink_2 } else { p.ink })
-                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
-                    )
-                    .child(
-                        h_flex()
-                            .gap(px(8.))
-                            .min_w_0()
-                            .flex_wrap()
-                            .text_size(px(12.))
-                            .text_color(p.ink_3)
-                            .child(div().flex_shrink_0().child(s::files(t.file_count)))
-                            .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
-                    )
-                    .children(
-                        t.conn
-                            .as_ref()
-                            .filter(|c| c.kind == ConnKind::Relay && c.same_network)
-                            .map(|_| {
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(p.ink_2)
-                                    .child(selectable(
-                                        format!("hint-{}", t.id),
-                                        same_network_hint(&t.peer_name),
-                                    ))
-                            }),
-                    ),
-            )
-            .child(
+        let row = wrapping_row(
+            v_flex()
+                .gap(px(2.))
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(if waiting { p.ink_2 } else { p.ink })
+                        .child(selectable(format!("label-{}", t.id), t.label.clone())),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(8.))
+                        .min_w_0()
+                        .flex_wrap()
+                        .text_size(px(12.))
+                        .text_color(p.ink_3)
+                        .child(div().flex_shrink_0().child(s::files(t.file_count)))
+                        .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
+                )
+                .children(
+                    t.conn
+                        .as_ref()
+                        .filter(|c| c.kind == ConnKind::Relay && c.same_network)
+                        .map(|_| {
+                            div()
+                                .text_size(px(12.))
+                                .text_color(p.ink_2)
+                                .child(selectable(
+                                    format!("hint-{}", t.id),
+                                    same_network_hint(&t.peer_name),
+                                ))
+                        }),
+                ),
+            [
                 div()
                     .w(px(150.))
                     .flex_shrink_0()
                     .when_some(mode, |d, mode| d.child(strip(percent, mode, &p))),
-            )
-            .child(
                 div()
                     .w(px(34.))
                     .flex_shrink_0()
@@ -878,20 +871,17 @@ impl GigapairApp {
                             format!("{}%", percent.floor()),
                         ))
                     }),
-            )
-            .child(
                 div()
                     .w(px(112.))
                     .flex_shrink_0()
                     .child(amount(&t.id, big, small, &p)),
-            )
-            .child(div().w(px(74.)).flex_shrink_0().child(rate))
-            .child(
+                div().w(px(74.)).flex_shrink_0().child(rate),
                 div()
                     .w(px(132.))
                     .flex_shrink_0()
                     .child(self.transfer_actions(t, cx)),
-            );
+            ],
+        );
 
         v_flex()
             .py(px(8.))
@@ -1191,15 +1181,11 @@ impl GigapairApp {
                     .flex_shrink_0()
                     .children((0..6).map(|_| glyph(style::icon::CELL, 12., p.ink_3))),
             )
-            .child(
+            .child(wrapping_row(
                 div()
-                    .flex_1()
-                    .min_w_0()
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(selectable("drop-hint", s::drop_hint(&c.name))),
-            )
-            .child(
-                h_flex()
+                [h_flex()
                     .gap(px(6.))
                     .child(Button::new("choose-files").label(s::CHOOSE_FILES).on_click(
                         cx.listener(move |app, _, window, cx| {
@@ -1212,13 +1198,15 @@ impl GigapairApp {
                             .on_click(cx.listener(move |app, _, window, cx| {
                                 app.pick_and_send(id_folder.clone(), true, window, cx)
                             })),
-                    ),
-            );
+                    )],
+            ));
 
+        // Top-aligned: a wrapped id would otherwise put "Offline" beside
+        // its last line.
         let meta = h_flex()
             .gap(px(10.))
             .min_w_0()
-            .items_baseline()
+            .items_start()
             .child(
                 div()
                     .flex_shrink_0()
@@ -1516,6 +1504,64 @@ impl GigapairApp {
             Direction::Receive => s::received_from(&t.peer_name, t.file_count),
         };
 
+        let name = v_flex()
+            .gap(px(2.))
+            .child(
+                div()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(selectable(format!("label-{}", t.id), t.label.clone())),
+            )
+            .child(
+                h_flex()
+                    .gap(px(8.))
+                    .min_w_0()
+                    .flex_wrap()
+                    .text_size(px(12.))
+                    .text_color(p.ink_3)
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .child(selectable(format!("who-{}", t.id), who)),
+                    )
+                    .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
+            );
+        let columns = [
+            div()
+                .w(px(96.))
+                .flex_shrink_0()
+                .child(amount(&t.id, big, small, &p)),
+            v_flex()
+                .w(px(220.))
+                .flex_shrink_0()
+                .text_size(px(12.))
+                .line_height(px(16.))
+                .child(
+                    div()
+                        .text_color(color)
+                        .child(selectable(format!("outcome-{}", t.id), headline)),
+                )
+                .when_some(detail, |d, detail| {
+                    d.child(
+                        div()
+                            .text_color(p.ink_2)
+                            .line_clamp(2)
+                            .child(selectable(format!("detail-{}", t.id), detail)),
+                    )
+                }),
+            div()
+                .w(px(40.))
+                .flex_shrink_0()
+                .text_right()
+                .text_size(px(12.))
+                .text_color(p.ink_3)
+                .font_features(tabular())
+                .child(selectable(format!("when-{}", t.id), when)),
+            div()
+                .w(px(96.))
+                .flex_shrink_0()
+                .child(self.transfer_actions(t, cx)),
+        ];
+
         h_flex()
             .gap(px(14.))
             .py(px(8.))
@@ -1523,73 +1569,7 @@ impl GigapairApp {
             .border_t_1()
             .border_color(p.line)
             .child(dir_glyph(t.direction, 16., p.ink, &p))
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap(px(2.))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
-                    )
-                    .child(
-                        h_flex()
-                            .gap(px(8.))
-                            .min_w_0()
-                            .flex_wrap()
-                            .text_size(px(12.))
-                            .text_color(p.ink_3)
-                            .child(
-                                div()
-                                    .flex_shrink_0()
-                                    .child(selectable(format!("who-{}", t.id), who)),
-                            )
-                            .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
-                    ),
-            )
-            .child(
-                div()
-                    .w(px(96.))
-                    .flex_shrink_0()
-                    .child(amount(&t.id, big, small, &p)),
-            )
-            .child(
-                v_flex()
-                    .w(px(220.))
-                    .flex_shrink_0()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .child(
-                        div()
-                            .text_color(color)
-                            .child(selectable(format!("outcome-{}", t.id), headline)),
-                    )
-                    .when_some(detail, |d, detail| {
-                        d.child(
-                            div()
-                                .text_color(p.ink_2)
-                                .line_clamp(2)
-                                .child(selectable(format!("detail-{}", t.id), detail)),
-                        )
-                    }),
-            )
-            .child(
-                div()
-                    .w(px(40.))
-                    .flex_shrink_0()
-                    .text_right()
-                    .text_size(px(12.))
-                    .text_color(p.ink_3)
-                    .font_features(tabular())
-                    .child(selectable(format!("when-{}", t.id), when)),
-            )
-            .child(
-                div()
-                    .w(px(96.))
-                    .flex_shrink_0()
-                    .child(self.transfer_actions(t, cx)),
-            )
+            .child(wrapping_row(name, columns))
             .into_any_element()
     }
 
@@ -2282,6 +2262,30 @@ fn text(content: impl Into<SharedString>) -> SelectableText {
 fn selectable(id: impl Into<SharedString>, text: impl Into<SharedString>) -> SelectableText {
     SelectableText::new(id.into(), text)
 }
+
+/// A row of wrapping text (a transfer's name, the drop hint) followed by
+/// fixed-width columns (amount, status, buttons). When the text would get
+/// less than [`NAME_MIN_W`], the columns move to a line of their own below
+/// it, and they wrap among themselves if even that line is too narrow.
+/// Without this a narrow window squeezes the text to one letter per line.
+fn wrapping_row(name: Div, columns: impl IntoIterator<Item = Div>) -> Div {
+    h_flex()
+        .flex_1()
+        .min_w_0()
+        .flex_wrap()
+        .gap_x(px(14.))
+        .gap_y(px(6.))
+        .child(
+            name.flex_grow_1()
+                .flex_shrink_1()
+                .flex_basis(px(NAME_MIN_W))
+                .min_w_0(),
+        )
+        .child(h_flex().flex_wrap().gap(px(14.)).children(columns))
+}
+
+/// The narrowest a transfer's name gets before the columns beside it wrap.
+const NAME_MIN_W: f32 = 180.;
 
 /// An amount set wide, with its unit (and the total) small beside it.
 fn amount(id: &str, big: String, small: String, p: &Palette) -> Div {
