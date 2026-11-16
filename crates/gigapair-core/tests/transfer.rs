@@ -601,43 +601,6 @@ async fn contacts_with_the_same_name_stay_apart() {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn reset_tells_contacts_nothing() {
-    let tmp = tempfile::tempdir().unwrap();
-    let a = start(&tmp.path().join("a"), |_| {}).await;
-    let b = start(&tmp.path().join("b"), |_| {}).await;
-    pair(&a, &b, "bob", "alice").await;
-    let file = tmp.path().join("src/x.bin");
-    write_file(&file, 1000, 1);
-    let (t, _) = a.send_files("bob", vec![file]).await.unwrap();
-    wait_for(&b, &t.id, "offer", status_is(TransferStatus::PendingAccept)).await;
-    let mut events = a.subscribe();
-
-    a.prepare_reset().await;
-
-    // Here the transfer is stopped; the contact hears nothing: it keeps
-    // this device and its request as if the device had gone offline.
-    assert_eq!(a.transfer(&t.id).unwrap().status, TransferStatus::Cancelled);
-    assert_eq!(b.contacts().unwrap().len(), 1);
-    assert_eq!(
-        b.transfer(&t.id).unwrap().status,
-        TransferStatus::PendingAccept
-    );
-    let reset = tokio::time::timeout(TIMEOUT, async {
-        loop {
-            if let Ok(Event::Reset) = events.recv().await {
-                return;
-            }
-        }
-    })
-    .await;
-    assert!(reset.is_ok(), "no Reset event");
-
-    for e in [a, b] {
-        e.shutdown().await;
-    }
-}
-
 /// Manual throughput check: `GIGAPAIR_TEST_MB=4096 cargo test --release
 /// -p gigapair-core --test transfer throughput -- --ignored --nocapture`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

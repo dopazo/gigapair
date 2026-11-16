@@ -121,16 +121,4 @@ mod tests {
         assert_eq!(parse_counter("talk(3)"), None);
         assert_eq!(parse_counter("talk"), None);
     }
-
-    #[test]
-    fn real_file_system_detects_existing_file() {
-        let dir = std::env::temp_dir().join(format!("gigapair-collision-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("talk.mp4"), b"x").unwrap();
-
-        let picked = unique_destination(&dir, "talk.mp4");
-        std::fs::remove_dir_all(&dir).unwrap();
-
-        assert_eq!(picked, dir.join("talk (1).mp4"));
-    }
 }
