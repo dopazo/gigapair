@@ -961,7 +961,11 @@ fn place_file(
     f: &FileRow,
     part: &Path,
 ) -> std::io::Result<PathBuf> {
-    set_mtime(part, system_time_from_ns(f.mtime_ns))?;
+    // The time is nice to keep but not worth losing a verified file over:
+    // some filesystems (exFAT, network shares, FUSE) refuse it.
+    if let Err(e) = set_mtime(part, system_time_from_ns(f.mtime_ns)) {
+        tracing::warn!("could not set the time of {}: {e}", f.rel_path);
+    }
     let (root, rest) = split_root(&f.rel_path);
     match rest {
         None => {
