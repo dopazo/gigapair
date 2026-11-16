@@ -222,13 +222,18 @@ jobs:
 
   # Edited by hand (see allow-dirty in dist-workspace.toml): dist 0.34 on
   # Windows writes `uses: $/.github/...` here; the `if` skips the job on pull
-  # requests, where no archives are built.
+  # requests, where no archives are built. A called workflow cannot ask for
+  # more permissions than its caller grants, hence `permissions` on both jobs.
   custom-build-dmg:
     needs:
       - plan
       - build-local-artifacts
     if: ${{ needs.plan.outputs.publishing == 'true' }}
     uses: ./.github/workflows/build-dmg.yml
+    permissions:
+      "attestations": "write"
+      "contents": "read"
+      "id-token": "write"
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
@@ -238,6 +243,10 @@ jobs:
       - build-local-artifacts
     if: ${{ needs.plan.outputs.publishing == 'true' }}
     uses: ./.github/workflows/build-linux-packages.yml
+    permissions:
+      "attestations": "write"
+      "contents": "read"
+      "id-token": "write"
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
