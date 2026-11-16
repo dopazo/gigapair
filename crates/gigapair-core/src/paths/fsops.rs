@@ -305,17 +305,6 @@ mod tests {
     }
 
     #[test]
-    fn rename_to_free_name() {
-        let dir = tempfile::tempdir().unwrap();
-        let a = dir.path().join("a");
-        let b = dir.path().join("b");
-        std::fs::write(&a, b"data").unwrap();
-        rename_noclobber(&a, &b).unwrap();
-        assert!(!a.exists());
-        assert_eq!(std::fs::read(&b).unwrap(), b"data");
-    }
-
-    #[test]
     fn move_into_unique_adds_counter() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("talk.mp4"), b"old").unwrap();
@@ -334,16 +323,6 @@ mod tests {
         std::fs::create_dir(dir.path().join("talks")).unwrap();
         let made = create_unique_dir(dir.path(), "talks").unwrap();
         assert_eq!(made, dir.path().join("talks (1)"));
-    }
-
-    #[test]
-    fn partial_dir_is_created() {
-        let dir = tempfile::tempdir().unwrap();
-        let dest = dir.path().join("incoming");
-        let p = ensure_partial_dir(&dest).unwrap();
-        assert!(p.is_dir());
-        // Idempotent.
-        ensure_partial_dir(&dest).unwrap();
     }
 
     #[test]

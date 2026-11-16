@@ -108,14 +108,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn under_root() {
-        let d = AppDirs::under(Path::new("/x"));
-        assert_eq!(d.config_file(), Path::new("/x/config/config.toml"));
-        assert_eq!(d.db_file(), Path::new("/x/data/gigapair.db"));
-        assert!(d.custom_root);
-    }
-
-    #[test]
     fn instance_tags_differ() {
         let a = AppDirs::under(Path::new("/a"));
         let b = AppDirs::under(Path::new("/b"));

@@ -100,6 +100,11 @@ pub enum Request {
     Subscribe,
     /// Stops the service.
     Shutdown,
+    /// Before deleting this device's data: stops every transfer, tells
+    /// clients ([`Event::Reset`]) and stops the service. Contacts are not
+    /// told: to them this device just goes offline. The client then deletes the data
+    /// ([`crate::reset::wipe`]) once the service has exited.
+    Reset,
 }
 
 // Adjacently tagged: internally tagged enums can't hold lists.
@@ -177,6 +182,9 @@ pub enum Event {
     Notice {
         message: String,
     },
+    /// This device's data is being deleted and the service is stopping:
+    /// clients must not start it again.
+    Reset,
 }
 
 /// Explanation shown the first time a relay is used (spec, "Arquitectura").

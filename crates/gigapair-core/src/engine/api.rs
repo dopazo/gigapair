@@ -11,8 +11,8 @@ use crate::types::{Contact, Direction, TransferInfo, TransferStatus, short_id};
 use crate::wire::{Notice, PROTOCOL_VERSION, PeerRequest};
 
 impl super::Engine {
-    /// Handles one client request. `Hello`, `Subscribe` and `Shutdown` are
-    /// connection-level and handled by the service.
+    /// Handles one client request. `Hello`, `Subscribe`, `Shutdown` and
+    /// `Reset` are connection-level and handled by the service.
     pub async fn handle(&self, req: Request) -> Response {
         match self.inner.handle(req).await {
             Ok(r) => r,
@@ -39,12 +39,33 @@ impl super::Engine {
     pub fn contacts(&self) -> EngineResult<Vec<Contact>> {
         self.inner.contacts()
     }
+
+    /// Before this device's data is deleted: stops every transfer and
+    /// removes partial downloads, then tells clients ([`Event::Reset`]) not
+    /// to start the service again. Contacts are not told anything: to them
+    /// this device just stops answering, like one that is switched off, so
+    /// they don't learn that Gigapair was reset or uninstalled here.
+    pub async fn prepare_reset(&self) {
+        let inner = &self.inner;
+        for row in inner.db.active_transfers().unwrap_or_default() {
+            inner.stop_task(&row.id);
+            let _ = inner
+                .db
+                .set_error(&row.id, Some("This device's data was deleted"));
+            inner.set_note(&row.id, None);
+            inner.set_status(&row.id, TransferStatus::Cancelled);
+            if row.direction == Direction::Receive {
+                recv::cleanup_partial(&row);
+            }
+        }
+        inner.emit(Event::Reset);
+    }
 }
 
 impl Inner {
     async fn handle(self: &Arc<Self>, req: Request) -> EngineResult<Response> {
         Ok(match req {
-            Request::Hello { .. } | Request::Subscribe | Request::Shutdown => {
+            Request::Hello { .. } | Request::Subscribe | Request::Shutdown | Request::Reset => {
                 return Err(EngineError::user("not supported here"));
             }
             Request::Status => Response::Status(self.status()),

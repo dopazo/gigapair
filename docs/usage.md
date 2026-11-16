@@ -152,6 +152,7 @@ The CLI binary is `gigapair` (optional short alias: `gpair`). Every command acce
 | `gigapair service install` / `uninstall` | Start the service at login (and now) / stop starting it at login |
 | `gigapair service start` / `stop` / `status` | Start, stop or check the service |
 | `gigapair logs` | Show where the log files are (service and desktop app) |
+| `gigapair reset [--yes]` | Delete everything Gigapair keeps on this device (see [Deleting your data](#deleting-your-data)); asks you to type `delete` unless `--yes` |
 | `gigapair --version` | Print the version |
 
 In `pair`, `--name` names the new contact (asked if missing) and `--yes` skips the four-word confirmation, for scripts.
@@ -321,6 +322,17 @@ A Windows Service, a Linux system unit with a dedicated user and settings in `/e
 | In-progress data | `.gigapair-partial\` in the destination folder | same | same |
 
 If no keyring is available (headless servers), the key is stored in a file with `0600` permissions in the data folder; set `key_storage = "file"` to choose this explicitly.
+
+### Deleting your data
+
+Uninstalling Gigapair keeps all of the above, so reinstalling or updating (which uninstalls the old version) keeps your contacts. To delete it, use **Settings → Delete this device's data** in the app, or `gigapair reset`, before uninstalling:
+
+- It deletes your contacts, this device's identity (the node key, from the keyring too), the transfer history and queue, the settings and the logs, and removes the start at login.
+- Transfers in progress are cancelled. Contacts aren't told anything: to them this device just appears offline, so they don't learn that you reset or uninstalled Gigapair. They can remove it from their own list.
+- Received files are never deleted.
+- The app closes when it's done. Using Gigapair again afterwards means pairing every contact again.
+
+With `--home` or `GIGAPAIR_HOME`, it deletes that instance's folders and leaves the start at login alone.
 
 ## Logs
 

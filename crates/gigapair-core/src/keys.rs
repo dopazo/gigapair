@@ -105,6 +105,21 @@ pub fn load_or_create(
     }
 }
 
+/// Deletes the node key from the keyring and the key file, wherever it is.
+/// Missing entries are fine; an unreachable keyring is an error.
+pub fn delete(dirs: &AppDirs) -> Result<(), KeyError> {
+    let file = dirs.key_file();
+    match std::fs::remove_file(&file) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(source) => return Err(KeyError::File { path: file, source }),
+    }
+    match keyring_entry(&keyring_account(dirs))?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(keyring_err(e)),
+    }
+}
+
 /// First run without a usable keyring (headless servers).
 fn file_fallback(file: &Path, e: KeyError) -> Result<(SecretKey, KeyLocation), KeyError> {
     tracing::warn!("system keyring unavailable ({e}); storing the node key in a 0600 file");

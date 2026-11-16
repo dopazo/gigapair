@@ -108,6 +108,13 @@ enum Command {
     },
     /// Show where the log files are (service and desktop app).
     Logs,
+    /// Delete everything Gigapair keeps on this device: contacts, this
+    /// device's identity, history, settings and logs. Received files stay.
+    Reset {
+        /// Don't ask for confirmation (scripts).
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -208,6 +215,9 @@ async fn run(cli: Cli) -> Result<()> {
     if let Command::Logs = &cli.command {
         return logs(&dirs);
     }
+    if let Command::Reset { yes } = &cli.command {
+        return reset(&dirs, *yes).await;
+    }
     let mut client = connect(&dirs).await?;
     match cli.command {
         Command::Pair { code, name, yes } => pair(&dirs, &mut client, code, name, yes).await,
@@ -281,7 +291,7 @@ async fn run(cli: Cli) -> Result<()> {
             other => Err(unexpected(other)),
         },
         Command::Config { action } => config(&mut client, action).await,
-        Command::Service { .. } | Command::Logs => unreachable_service(),
+        Command::Service { .. } | Command::Logs | Command::Reset { .. } => unreachable_service(),
     }
 }
 
@@ -630,6 +640,34 @@ async fn config(client: &mut Client, action: ConfigCmd) -> Result<()> {
                 })
                 .await?;
             println!("{} {key}", s::SAVED);
+        }
+    }
+    Ok(())
+}
+
+/// Deletes this device's data after an explicit confirmation.
+async fn reset(dirs: &AppDirs, yes: bool) -> Result<()> {
+    println!("{}", s::reset_intro(&dirs.downloads.display().to_string()));
+    if !yes {
+        if !std::io::stdin().is_terminal() {
+            bail!("{}", s::RESET_NEED_TTY_OR_YES);
+        }
+        let answer = prompt(s::RESET_QUESTION).await?;
+        if answer != "delete" {
+            println!("{}", s::RESET_CANCELLED);
+            return Ok(());
+        }
+    }
+    let left = gigapair_core::reset::reset_device(dirs).await?;
+    if left.is_empty() {
+        println!("{}", s::RESET_DONE);
+    } else {
+        println!("{}", s::RESET_PARTIAL);
+        for p in &left.paths {
+            println!("  {}", p.display());
+        }
+        if let Some(e) = &left.key_error {
+            println!("  {e}");
         }
     }
     Ok(())

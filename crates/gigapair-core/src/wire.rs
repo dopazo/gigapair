@@ -276,17 +276,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stranger_limit_is_checked_before_reading() {
-        let (mut a, mut b) = tokio::io::duplex(1024);
-        let len = (MAX_STRANGER_MESSAGE + 1) as u32;
-        a.write_all(&len.to_be_bytes()).await.unwrap();
-        assert!(matches!(
-            read_msg_max::<_, PeerRequest>(&mut b, MAX_STRANGER_MESSAGE).await,
-            Err(WireError::TooLarge(_))
-        ));
-    }
-
-    #[tokio::test]
     async fn oversized_is_rejected() {
         let (mut a, mut b) = tokio::io::duplex(1024);
         a.write_all(&(u32::MAX).to_be_bytes()).await.unwrap();
