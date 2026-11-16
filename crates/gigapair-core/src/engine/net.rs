@@ -12,7 +12,8 @@ use super::{EngineError, EngineResult, Inner, NetworkMode, pair, recv, send};
 use crate::config::Config;
 use crate::types::{ConnInfo, ConnKind};
 use crate::wire::{
-    ALPN, ErrorCode, PROTOCOL_VERSION, PeerRequest, PeerResponse, WireError, read_msg, write_msg,
+    ALPN, ErrorCode, MAX_MESSAGE, MAX_STRANGER_MESSAGE, PROTOCOL_VERSION, PeerRequest,
+    PeerResponse, WireError, read_msg, read_msg_max, write_msg,
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -455,13 +456,13 @@ impl Inner {
         match self.open_request(&conn, req).await {
             // A cached connection may have died silently: retry once fresh.
             Err(NetError::Connect(_) | NetError::Wire(WireError::Io(_))) => {
-                self.forget_conn(peer).await;
+                self.forget_conn(peer, &conn).await;
                 let conn = self.connect(peer).await?;
                 match self.open_request(&conn, req).await {
                     Ok((r, _)) => Ok(r),
                     Err(e) => {
                         if !matches!(e, NetError::Remote { .. }) {
-                            self.forget_conn(peer).await;
+                            self.forget_conn(peer, &conn).await;
                         }
                         Err(e)
                     }
@@ -471,11 +472,18 @@ impl Inner {
         }
     }
 
-    /// Drops the cached connection to `peer` so the next attempt dials
-    /// again.
-    pub(super) async fn forget_conn(&self, peer: EndpointId) {
-        if let Some(c) = self.conns.lock().await.remove(&peer) {
-            c.close(0u32.into(), b"reconnecting");
+    /// Stops reusing `failed` so the next attempt dials again. Only that
+    /// connection is dropped from the cache: another task may already have
+    /// replaced it with a working one. It isn't closed either, since a slow
+    /// answer doesn't mean the transfers sharing it are dead; it closes once
+    /// the last task using it lets go.
+    pub(super) async fn forget_conn(&self, peer: EndpointId, failed: &Connection) {
+        let mut conns = self.conns.lock().await;
+        if conns
+            .get(&peer)
+            .is_some_and(|c| c.stable_id() == failed.stable_id())
+        {
+            conns.remove(&peer);
         }
     }
 
@@ -573,7 +581,21 @@ async fn handle_stream(
     mut send: SendStream,
     mut recv: RecvStream,
 ) -> Result<(), NetError> {
-    let env = match read_msg::<_, PeerRequest>(&mut recv).await {
+    // Anyone who knows this node id can connect. Until the sender is known
+    // to be a contact, accept only small messages, and don't let a stalled
+    // stream hold its buffer.
+    let max = if inner.is_contact(&remote) {
+        MAX_MESSAGE
+    } else {
+        MAX_STRANGER_MESSAGE
+    };
+    let read = tokio::time::timeout(
+        ANSWER_TIMEOUT,
+        read_msg_max::<_, PeerRequest>(&mut recv, max),
+    )
+    .await
+    .map_err(|_| NetError::Connect("the request did not arrive in time".into()))?;
+    let env = match read {
         Ok(env) => env,
         Err(WireError::Incompatible { .. }) => {
             return reply(

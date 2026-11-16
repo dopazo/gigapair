@@ -93,7 +93,10 @@ impl Inner {
                 )
             })?;
         let node = entry.info.node_id.clone();
-        self.db.upsert_contact(&node, name, false)?;
+        // Two devices often share a name ("MacBook Pro"); keep contacts
+        // apart so `send <name>` can't pick the wrong one.
+        let name = self.unique_contact_name(name, &node)?;
+        self.db.upsert_contact(&node, &name, false)?;
         if let Some(addr) = &entry.addr {
             store_addr(self, addr);
         }

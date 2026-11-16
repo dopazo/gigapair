@@ -19,6 +19,10 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// Upper bound for one JSON message (an offer with many files can be large).
 pub const MAX_MESSAGE: usize = 64 * 1024 * 1024;
 
+/// Upper bound for a message from a device that isn't a contact: it can only
+/// pair or unpair, which are small.
+pub const MAX_STRANGER_MESSAGE: usize = 64 * 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Envelope<T> {
     pub v: u32,
@@ -197,10 +201,19 @@ where
     R: AsyncRead + Unpin,
     T: DeserializeOwned,
 {
+    read_msg_max(r, MAX_MESSAGE).await
+}
+
+/// [`read_msg`] with a smaller size limit, checked before allocating.
+pub async fn read_msg_max<R, T>(r: &mut R, max: usize) -> Result<Envelope<T>, WireError>
+where
+    R: AsyncRead + Unpin,
+    T: DeserializeOwned,
+{
     let mut len = [0u8; 4];
     r.read_exact(&mut len).await?;
     let len = u32::from_be_bytes(len) as usize;
-    if len > MAX_MESSAGE {
+    if len > max.min(MAX_MESSAGE) {
         return Err(WireError::TooLarge(len));
     }
     let mut buf = vec![0u8; len];
@@ -260,6 +273,17 @@ mod tests {
         a.write_all(bytes).await.unwrap();
         let err = read_msg::<_, PeerRequest>(&mut b).await.unwrap_err();
         assert!(matches!(err, WireError::Incompatible { peer: 99, .. }));
+    }
+
+    #[tokio::test]
+    async fn stranger_limit_is_checked_before_reading() {
+        let (mut a, mut b) = tokio::io::duplex(1024);
+        let len = (MAX_STRANGER_MESSAGE + 1) as u32;
+        a.write_all(&len.to_be_bytes()).await.unwrap();
+        assert!(matches!(
+            read_msg_max::<_, PeerRequest>(&mut b, MAX_STRANGER_MESSAGE).await,
+            Err(WireError::TooLarge(_))
+        ));
     }
 
     #[tokio::test]
