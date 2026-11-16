@@ -914,49 +914,41 @@ impl GigapairApp {
                 .shadow(false)
         };
         let (reject_style, plain_style) = (on_band(p.danger_on_band), on_band(p.bg));
-        h_flex()
-            .gap(px(12.))
-            .pl(px(12.))
-            .pr(px(8.))
-            .py(px(8.))
-            .rounded(px(8.))
-            .bg(p.ink)
-            .text_color(p.bg)
-            .child(dir_glyph(Direction::Receive, 16., p.bg, &p))
+        // "Felipe PC wants to send movie.mov 50 GB, 1 file", flowing onto
+        // more lines as needed; a long name wraps instead of being cut.
+        let sentence = h_flex()
+            .flex_wrap()
+            .gap_x(px(4.))
             .child(
-                h_flex()
-                    .flex_1()
+                div()
                     .min_w_0()
-                    .overflow_hidden()
-                    .gap(px(4.))
-                    .whitespace_nowrap()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(selectable(format!("from-{}", t.id), t.peer_name.clone())),
-                    )
-                    .child(selectable(format!("wants-{}", t.id), s::WANTS_TO_SEND))
-                    .child(
-                        div()
-                            .min_w_0()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .opacity(0.7)
-                            .font_features(tabular())
-                            .child(selectable(
-                                format!("size-{}", t.id),
-                                format!(
-                                    "{}, {}",
-                                    format_bytes(t.total_bytes),
-                                    s::files(t.file_count)
-                                ),
-                            )),
-                    ),
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(selectable(format!("from-{}", t.id), t.peer_name.clone())),
             )
+            .child(selectable(format!("wants-{}", t.id), s::WANTS_TO_SEND))
+            .child(
+                div()
+                    .min_w_0()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(selectable(format!("label-{}", t.id), t.label.clone())),
+            )
+            .child(
+                div()
+                    .opacity(0.7)
+                    .font_features(tabular())
+                    .child(selectable(
+                        format!("size-{}", t.id),
+                        format!(
+                            "{}, {}",
+                            format_bytes(t.total_bytes),
+                            s::files(t.file_count)
+                        ),
+                    )),
+            );
+        let buttons = h_flex()
+            .flex_wrap()
+            .gap(px(12.))
+            .gap_y(px(6.))
             .child(
                 Button::new(SharedString::from(format!("reject-{id}")))
                     .label(s::REJECT)
@@ -989,7 +981,17 @@ impl GigapairApp {
                             cx,
                         )
                     })),
-            )
+            );
+        h_flex()
+            .gap(px(12.))
+            .pl(px(12.))
+            .pr(px(8.))
+            .py(px(8.))
+            .rounded(px(8.))
+            .bg(p.ink)
+            .text_color(p.bg)
+            .child(dir_glyph(Direction::Receive, 16., p.bg, &p))
+            .child(wrapping_row(sentence, [buttons]))
             .into_any_element()
     }
 
@@ -1186,6 +1188,7 @@ impl GigapairApp {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(selectable("drop-hint", s::drop_hint(&c.name))),
                 [h_flex()
+                    .flex_wrap()
                     .gap(px(6.))
                     .child(Button::new("choose-files").label(s::CHOOSE_FILES).on_click(
                         cx.listener(move |app, _, window, cx| {
@@ -1230,28 +1233,25 @@ impl GigapairApp {
                 Some(remove.into_any_element()),
                 &p,
             ))
-            .child(
-                h_flex()
-                    .gap(px(12.))
-                    .child(
-                        Switch::new("auto-accept")
-                            .checked(c.auto_accept)
-                            .small()
-                            .label(s::AUTO_ACCEPT_LABEL)
-                            .on_click(cx.listener(move |app, on: &bool, window, cx| {
-                                app.act(
-                                    Request::ContactTrust {
-                                        contact: id_trust.clone(),
-                                        auto_accept: *on,
-                                    },
-                                    window,
-                                    cx,
-                                )
-                            })),
-                    )
-                    .child(div().flex_1())
-                    .child(rename),
-            )
+            .child(wrapping_row(
+                div().child(
+                    Switch::new("auto-accept")
+                        .checked(c.auto_accept)
+                        .small()
+                        .label(s::AUTO_ACCEPT_LABEL)
+                        .on_click(cx.listener(move |app, on: &bool, window, cx| {
+                            app.act(
+                                Request::ContactTrust {
+                                    contact: id_trust.clone(),
+                                    auto_accept: *on,
+                                },
+                                window,
+                                cx,
+                            )
+                        })),
+                ),
+                [div().child(rename)],
+            ))
             .child(drop_zone)
             .child(self.render_queue(node_id, cx))
             .into_any_element()
