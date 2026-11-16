@@ -425,9 +425,6 @@ async fn download_task(inner: &Arc<Inner>, id: &str, token: &CancellationToken) 
                 }
             }
             Err(DlError::Retry(msg)) => {
-                if let Ok(peer) = row.peer.parse::<EndpointId>() {
-                    inner.forget_conn(peer).await;
-                }
                 requeue(inner, id, &row);
                 let delay = backoff.next_delay();
                 inner.set_note(id, Some(format!("{msg}; retrying")));
@@ -550,73 +547,90 @@ async fn run(inner: &Arc<Inner>, id: &str, token: &CancellationToken) -> Result<
             _ = token.cancelled() => return Err(DlError::Stopped),
             c = inner.connect(peer) => c.map_err(|_| DlError::Retry(format!("Waiting for {name} to come online")))?,
         };
-        wait_direct(inner, &conn, token, &name).await?;
-        inner.set_conn(id, conn_info(&conn));
-        inner.set_note(id, None);
-        inner.set_status(id, TransferStatus::Transferring);
-
-        let tdir = ensure_partial_dir(&dest)
-            .and_then(|p| {
-                let t = p.join(id);
-                std::fs::create_dir_all(for_io(&t)).map(|_| t)
-            })
-            .map_err(|e| DlError::Fatal(format!("could not write to {}: {e}", dest.display())))?;
-
-        let count = files.len();
-        for (pos, f) in files.iter().enumerate() {
-            if f.done {
-                continue;
-            }
-            if token.is_cancelled() {
-                return Err(DlError::Stopped);
-            }
-            let hashes = match &f.block_hashes {
-                Some(h) => h.clone(),
-                None => fetch_hashes(inner, &conn, id, f, &name).await?,
-            };
-            let part = tdir.join(format!("{}.part", f.idx));
-            let start = {
-                let (part, hashes, size, verified) =
-                    (part.clone(), hashes.clone(), f.size, f.verified_blocks);
-                tokio::task::spawn_blocking(move || resume_point(&part, verified, &hashes, size))
-                    .await
-                    .map_err(|e| DlError::Fatal(e.to_string()))?
-            };
-            if start != f.verified_blocks {
-                let _ = inner.db.set_verified_blocks(id, f.idx, start);
-            }
-            let current = inner
-                .db
-                .files(id)
-                .map_err(|e| DlError::Fatal(e.to_string()))?;
-            let others = files_done_bytes(&current, Some(f.idx));
-            inner.progress(id, others + (start * BLOCK_SIZE).min(f.size));
-
-            if start < block_count(f.size) {
-                inner.set_status(id, TransferStatus::Transferring);
-                fetch_data(
-                    inner, &conn, id, f, start, hashes, &part, others, token, &name,
-                )
-                .await?;
-                // The path may have changed while downloading.
-                inner.set_conn(id, conn_info(&conn));
-            } else {
-                // Empty file, or everything already on disk.
-                OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(false)
-                    .open(for_io(&part))
-                    .map_err(|e| {
-                        DlError::Fatal(format!("could not write {}: {e}", part.display()))
-                    })?;
-            }
-
-            verify_and_place(inner, id, f, &part, &dest, pos + 1, count, token).await?;
+        let fetched = fetch_all(inner, id, &conn, &files, &dest, &name, token).await;
+        if matches!(fetched, Err(DlError::Retry(_))) {
+            // The next attempt dials again instead of reusing this one.
+            inner.forget_conn(peer, &conn).await;
         }
+        fetched?;
     }
 
     finish(inner, id, &row, &dest).await
+}
+
+/// Downloads, verifies and places every file not done yet over `conn`.
+async fn fetch_all(
+    inner: &Arc<Inner>,
+    id: &str,
+    conn: &Connection,
+    files: &[FileRow],
+    dest: &Path,
+    name: &str,
+    token: &CancellationToken,
+) -> Result<(), DlError> {
+    wait_direct(inner, conn, token, name).await?;
+    inner.set_conn(id, conn_info(conn));
+    inner.set_note(id, None);
+    inner.set_status(id, TransferStatus::Transferring);
+
+    let tdir = ensure_partial_dir(dest)
+        .and_then(|p| {
+            let t = p.join(id);
+            std::fs::create_dir_all(for_io(&t)).map(|_| t)
+        })
+        .map_err(|e| DlError::Fatal(format!("could not write to {}: {e}", dest.display())))?;
+
+    let count = files.len();
+    for (pos, f) in files.iter().enumerate() {
+        if f.done {
+            continue;
+        }
+        if token.is_cancelled() {
+            return Err(DlError::Stopped);
+        }
+        let hashes = match &f.block_hashes {
+            Some(h) => h.clone(),
+            None => fetch_hashes(inner, conn, id, f, name).await?,
+        };
+        let part = tdir.join(format!("{}.part", f.idx));
+        let start = {
+            let (part, hashes, size, verified) =
+                (part.clone(), hashes.clone(), f.size, f.verified_blocks);
+            tokio::task::spawn_blocking(move || resume_point(&part, verified, &hashes, size))
+                .await
+                .map_err(|e| DlError::Fatal(e.to_string()))?
+        };
+        if start != f.verified_blocks {
+            let _ = inner.db.set_verified_blocks(id, f.idx, start);
+        }
+        let current = inner
+            .db
+            .files(id)
+            .map_err(|e| DlError::Fatal(e.to_string()))?;
+        let others = files_done_bytes(&current, Some(f.idx));
+        inner.progress(id, others + (start * BLOCK_SIZE).min(f.size));
+
+        if start < block_count(f.size) {
+            inner.set_status(id, TransferStatus::Transferring);
+            fetch_data(
+                inner, conn, id, f, start, hashes, &part, others, token, name,
+            )
+            .await?;
+            // The path may have changed while downloading.
+            inner.set_conn(id, conn_info(conn));
+        } else {
+            // Empty file, or everything already on disk.
+            OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(for_io(&part))
+                .map_err(|e| DlError::Fatal(format!("could not write {}: {e}", part.display())))?;
+        }
+
+        verify_and_place(inner, id, f, &part, dest, pos + 1, count, token).await?;
+    }
+    Ok(())
 }
 
 async fn fetch_hashes(

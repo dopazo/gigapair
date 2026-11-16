@@ -456,13 +456,13 @@ impl Inner {
         match self.open_request(&conn, req).await {
             // A cached connection may have died silently: retry once fresh.
             Err(NetError::Connect(_) | NetError::Wire(WireError::Io(_))) => {
-                self.forget_conn(peer).await;
+                self.forget_conn(peer, &conn).await;
                 let conn = self.connect(peer).await?;
                 match self.open_request(&conn, req).await {
                     Ok((r, _)) => Ok(r),
                     Err(e) => {
                         if !matches!(e, NetError::Remote { .. }) {
-                            self.forget_conn(peer).await;
+                            self.forget_conn(peer, &conn).await;
                         }
                         Err(e)
                     }
@@ -472,11 +472,18 @@ impl Inner {
         }
     }
 
-    /// Drops the cached connection to `peer` so the next attempt dials
-    /// again.
-    pub(super) async fn forget_conn(&self, peer: EndpointId) {
-        if let Some(c) = self.conns.lock().await.remove(&peer) {
-            c.close(0u32.into(), b"reconnecting");
+    /// Stops reusing `failed` so the next attempt dials again. Only that
+    /// connection is dropped from the cache: another task may already have
+    /// replaced it with a working one. It isn't closed either, since a slow
+    /// answer doesn't mean the transfers sharing it are dead; it closes once
+    /// the last task using it lets go.
+    pub(super) async fn forget_conn(&self, peer: EndpointId, failed: &Connection) {
+        let mut conns = self.conns.lock().await;
+        if conns
+            .get(&peer)
+            .is_some_and(|c| c.stable_id() == failed.stable_id())
+        {
+            conns.remove(&peer);
         }
     }
 
