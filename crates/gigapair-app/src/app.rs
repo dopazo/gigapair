@@ -1198,6 +1198,9 @@ impl GigapairApp {
                     .flex_1()
                     .min_w_0()
                     .font_weight(FontWeight::SEMIBOLD)
+                    // One line, like the other selectable labels: selecting
+                    // it while it wrapped looked laggy.
+                    .truncate()
                     .child(selectable("drop-hint", s::drop_hint(&c.name))),
             )
             .child(
@@ -2011,6 +2014,15 @@ impl Render for GigapairApp {
             // only does this while its mouse-up handler keeps seeing the
             // release, which inputs and buttons stop; after clicking one,
             // a selection would otherwise stay until the next drag.
+            // A click that no focusable element took (empty space, text)
+            // moves the keyboard focus away, so a switch or input clicked
+            // earlier stops looking selected. Focusable elements focus
+            // themselves first and mark the event (prevent_default).
+            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                if !window.default_prevented() {
+                    window.blur(cx);
+                }
+            })
             .capture_any_mouse_down(|event, window, cx| {
                 if event.button == MouseButton::Left
                     && event.click_count == 1
