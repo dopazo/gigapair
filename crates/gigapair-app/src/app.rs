@@ -13,6 +13,7 @@ use gigapair_core::types::{
     ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
     format_bytes, format_duration, now_secs,
 };
+use gpui_kit::base::SelectableText;
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::notification::Notification;
@@ -818,7 +819,7 @@ impl GigapairApp {
                             .truncate()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if waiting { p.ink_2 } else { p.ink })
-                            .child(t.label.clone()),
+                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
                     )
                     .child(
                         h_flex()
@@ -862,7 +863,7 @@ impl GigapairApp {
                 div()
                     .w(px(112.))
                     .flex_shrink_0()
-                    .child(amount(big, small, &p)),
+                    .child(amount(&t.id, big, small, &p)),
             )
             .child(div().w(px(74.)).flex_shrink_0().child(rate))
             .child(
@@ -930,7 +931,7 @@ impl GigapairApp {
                             .min_w_0()
                             .truncate()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(t.label.clone()),
+                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
                     )
                     .child(
                         div()
@@ -1209,7 +1210,7 @@ impl GigapairApp {
                     .truncate()
                     .text_size(px(11.5))
                     .text_color(p.ink_3)
-                    .child(c.node_id.clone()),
+                    .child(selectable("contact-node-id", c.node_id.clone())),
             );
 
         v_flex()
@@ -1507,7 +1508,7 @@ impl GigapairApp {
                         div()
                             .truncate()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(t.label.clone()),
+                            .child(selectable(format!("label-{}", t.id), t.label.clone())),
                     )
                     .child(
                         h_flex()
@@ -1516,7 +1517,11 @@ impl GigapairApp {
                             .overflow_hidden()
                             .text_size(px(12.))
                             .text_color(p.ink_3)
-                            .child(div().flex_shrink_0().child(who))
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .child(selectable(format!("who-{}", t.id), who)),
+                            )
                             .children(t.conn.as_ref().map(|c| conn_tag(&t.id, c, &p))),
                     ),
             )
@@ -1524,7 +1529,7 @@ impl GigapairApp {
                 div()
                     .w(px(96.))
                     .flex_shrink_0()
-                    .child(amount(big, small, &p)),
+                    .child(amount(&t.id, big, small, &p)),
             )
             .child(
                 v_flex()
@@ -1532,9 +1537,18 @@ impl GigapairApp {
                     .flex_shrink_0()
                     .text_size(px(12.))
                     .line_height(px(16.))
-                    .child(div().text_color(color).child(headline))
+                    .child(
+                        div()
+                            .text_color(color)
+                            .child(selectable(format!("outcome-{}", t.id), headline)),
+                    )
                     .when_some(detail, |d, detail| {
-                        d.child(div().text_color(p.ink_2).line_clamp(2).child(detail))
+                        d.child(
+                            div()
+                                .text_color(p.ink_2)
+                                .line_clamp(2)
+                                .child(selectable(format!("detail-{}", t.id), detail)),
+                        )
                     }),
             )
             .child(
@@ -2111,8 +2125,13 @@ fn strip(percent: f64, mode: StripMode, p: &Palette) -> Div {
         }))
 }
 
+/// Text the user can select with the mouse and copy (Ctrl+C, Cmd+C).
+fn selectable(id: impl Into<SharedString>, text: impl Into<SharedString>) -> SelectableText {
+    SelectableText::new(id.into(), text)
+}
+
 /// An amount set wide, with its unit (and the total) small beside it.
-fn amount(big: String, small: String, p: &Palette) -> Div {
+fn amount(id: &str, big: String, small: String, p: &Palette) -> Div {
     h_flex()
         .justify_end()
         .items_baseline()
@@ -2124,7 +2143,7 @@ fn amount(big: String, small: String, p: &Palette) -> Div {
                 .text_size(px(15.))
                 .text_color(p.ink)
                 .font_features(tabular())
-                .child(big),
+                .child(selectable(format!("amount-{id}"), big)),
         )
         .child(
             div()
@@ -2132,7 +2151,7 @@ fn amount(big: String, small: String, p: &Palette) -> Div {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(p.ink_3)
                 .font_features(tabular())
-                .child(small),
+                .child(selectable(format!("unit-{id}"), small)),
         )
 }
 
