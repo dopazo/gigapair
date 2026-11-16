@@ -497,6 +497,27 @@ pub(super) async fn serve_get(
             )
             .await;
         }
+        // A late request for a transfer that already ended gets no data.
+        TransferStatus::Completed => {
+            return reply_err(
+                &mut send,
+                ErrorCode::BadRequest,
+                "this transfer is already complete",
+            )
+            .await;
+        }
+        TransferStatus::Rejected => {
+            return reply_err(&mut send, ErrorCode::Rejected, "this transfer was rejected").await;
+        }
+        TransferStatus::Failed => {
+            let reason = row.error.as_deref().unwrap_or("unknown error");
+            return reply_err(
+                &mut send,
+                ErrorCode::Internal,
+                &format!("the transfer failed on the sending device: {reason}"),
+            )
+            .await;
+        }
         _ => {}
     }
     let info = conn_info(conn);
@@ -545,6 +566,13 @@ pub(super) async fn serve_get(
         if let Some((_, old)) = l.serving.replace((serving_gen, serving.clone())) {
             old.cancel();
         }
+    }
+    // A pause or cancel that came after the check above couldn't stop this
+    // stream yet; now that it's registered, look again.
+    if let Ok(Some(now)) = inner.db.transfer(id)
+        && (now.status.is_terminal() || now.status == TransferStatus::Paused)
+    {
+        serving.cancel();
     }
     if row.status != TransferStatus::Transferring {
         inner.set_status(id, TransferStatus::Transferring);
