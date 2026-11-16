@@ -23,9 +23,13 @@ pub enum KeyLocation {
 #[derive(Debug, thiserror::Error)]
 pub enum KeyError {
     #[error(
-        "could not use the system keyring: {0}. Set key_storage = \"file\" in config.toml on headless machines"
+        "could not use the system keyring: {0}. If it is locked or not running yet, unlock it and start Gigapair again"
     )]
     Keyring(String),
+    #[error(
+        "this device's key was not found, although Gigapair has been used here before ({0}). If the system keyring is locked or not running yet, unlock it and start Gigapair again. To start over with a new identity (every contact must pair again), delete {1}"
+    )]
+    Missing(String, std::path::PathBuf),
     #[error("could not read or write the key file {path}: {source}")]
     File {
         path: std::path::PathBuf,
@@ -38,30 +42,73 @@ pub enum KeyError {
 }
 
 /// Loads the node key, creating and storing a new one on first run.
+///
+/// A new key is created only when this device has no identity yet (no
+/// database). Afterwards a key that can't be found is an error, never a
+/// silent new identity: that would orphan every paired contact, e.g. when
+/// the service starts before the keyring is unlocked. Switching
+/// `key_storage` between `file` and `keyring` carries the key over.
 pub fn load_or_create(
     dirs: &AppDirs,
     storage: KeyStorage,
 ) -> Result<(SecretKey, KeyLocation), KeyError> {
     let file = dirs.key_file();
     let account = keyring_account(dirs);
+    let used_before = dirs.db_file().exists();
+    let missing = |place: &str| KeyError::Missing(place.to_owned(), dirs.db_file());
     match storage {
-        KeyStorage::File => Ok((file_load_or_create(&file)?, KeyLocation::File)),
-        KeyStorage::Keyring => Ok((keyring_load_or_create(&account)?, KeyLocation::Keyring)),
-        KeyStorage::Auto => {
-            if file.exists() {
-                return Ok((file_load_or_create(&file)?, KeyLocation::File));
+        KeyStorage::File => {
+            if let Some(key) = file_read(&file)? {
+                return Ok((key, KeyLocation::File));
             }
-            match keyring_load_or_create(&account) {
-                Ok(key) => Ok((key, KeyLocation::Keyring)),
-                Err(e) => {
-                    tracing::warn!(
-                        "system keyring unavailable ({e}); storing the node key in a 0600 file"
-                    );
-                    Ok((file_load_or_create(&file)?, KeyLocation::File))
-                }
+            if used_before {
+                // Moving from the keyring to a file.
+                return match keyring_read(&account) {
+                    Ok(Some(key)) => {
+                        file_write(&file, &key)?;
+                        Ok((key, KeyLocation::File))
+                    }
+                    _ => Err(missing("not in the key file nor the keyring")),
+                };
+            }
+            Ok((file_create(&file)?, KeyLocation::File))
+        }
+        KeyStorage::Keyring => {
+            if let Some(key) = keyring_read(&account)? {
+                return Ok((key, KeyLocation::Keyring));
+            }
+            if let Some(key) = file_read(&file)? {
+                // Moving from a file to the keyring.
+                keyring_write(&account, &key)?;
+                return Ok((key, KeyLocation::Keyring));
+            }
+            if used_before {
+                return Err(missing("not in the keyring nor the key file"));
+            }
+            Ok((keyring_create(&account)?, KeyLocation::Keyring))
+        }
+        KeyStorage::Auto => {
+            if let Some(key) = file_read(&file)? {
+                return Ok((key, KeyLocation::File));
+            }
+            match keyring_read(&account) {
+                Ok(Some(key)) => Ok((key, KeyLocation::Keyring)),
+                Ok(None) if used_before => Err(missing("not in the keyring nor the key file")),
+                Err(e) if used_before => Err(e),
+                Ok(None) => match keyring_create(&account) {
+                    Ok(key) => Ok((key, KeyLocation::Keyring)),
+                    Err(e) => file_fallback(&file, e),
+                },
+                Err(e) => file_fallback(&file, e),
             }
         }
     }
+}
+
+/// First run without a usable keyring (headless servers).
+fn file_fallback(file: &Path, e: KeyError) -> Result<(SecretKey, KeyLocation), KeyError> {
+    tracing::warn!("system keyring unavailable ({e}); storing the node key in a 0600 file");
+    Ok((file_create(file)?, KeyLocation::File))
 }
 
 fn keyring_account(dirs: &AppDirs) -> String {
@@ -72,36 +119,48 @@ fn keyring_account(dirs: &AppDirs) -> String {
     }
 }
 
-fn keyring_load_or_create(account: &str) -> Result<SecretKey, KeyError> {
-    let err = |e: keyring::Error| KeyError::Keyring(e.to_string());
-    let entry = keyring::Entry::new(KEYRING_SERVICE, account).map_err(err)?;
-    match entry.get_secret() {
+fn keyring_err(e: keyring::Error) -> KeyError {
+    KeyError::Keyring(e.to_string())
+}
+
+fn keyring_entry(account: &str) -> Result<keyring::Entry, KeyError> {
+    keyring::Entry::new(KEYRING_SERVICE, account).map_err(keyring_err)
+}
+
+/// The key stored in the keyring, or `None` if there is no entry.
+fn keyring_read(account: &str) -> Result<Option<SecretKey>, KeyError> {
+    match keyring_entry(account)?.get_secret() {
         Ok(bytes) => {
             let arr: [u8; 32] = bytes
                 .as_slice()
                 .try_into()
                 .map_err(|_| KeyError::Keyring("stored key has the wrong length".into()))?;
-            Ok(SecretKey::from_bytes(&arr))
+            Ok(Some(SecretKey::from_bytes(&arr)))
         }
-        Err(keyring::Error::NoEntry) => {
-            let key = SecretKey::generate();
-            entry.set_secret(&key.to_bytes()).map_err(err)?;
-            // Read back: some stores accept writes they can't return.
-            let back = entry.get_secret().map_err(err)?;
-            if back.as_slice() != key.to_bytes().as_slice() {
-                return Err(KeyError::Keyring("key could not be read back".into()));
-            }
-            Ok(key)
-        }
-        Err(e) => Err(err(e)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(keyring_err(e)),
     }
 }
 
-fn file_load_or_create(path: &Path) -> Result<SecretKey, KeyError> {
-    let io_err = |source| KeyError::File {
-        path: path.to_path_buf(),
-        source,
-    };
+fn keyring_write(account: &str, key: &SecretKey) -> Result<(), KeyError> {
+    let entry = keyring_entry(account)?;
+    entry.set_secret(&key.to_bytes()).map_err(keyring_err)?;
+    // Read back: some stores accept writes they can't return.
+    let back = entry.get_secret().map_err(keyring_err)?;
+    if back.as_slice() != key.to_bytes().as_slice() {
+        return Err(KeyError::Keyring("key could not be read back".into()));
+    }
+    Ok(())
+}
+
+fn keyring_create(account: &str) -> Result<SecretKey, KeyError> {
+    let key = SecretKey::generate();
+    keyring_write(account, &key)?;
+    Ok(key)
+}
+
+/// The key stored in `path`, or `None` if the file doesn't exist.
+fn file_read(path: &Path) -> Result<Option<SecretKey>, KeyError> {
     match std::fs::read_to_string(path) {
         Ok(text) => {
             let bytes = data_encoding::HEXLOWER_PERMISSIVE
@@ -111,28 +170,42 @@ fn file_load_or_create(path: &Path) -> Result<SecretKey, KeyError> {
                 .as_slice()
                 .try_into()
                 .map_err(|_| KeyError::Corrupt(path.to_path_buf()))?;
-            Ok(SecretKey::from_bytes(&arr))
+            Ok(Some(SecretKey::from_bytes(&arr)))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).map_err(io_err)?;
-            }
-            let key = SecretKey::generate();
-            let hex = data_encoding::HEXLOWER.encode(&key.to_bytes());
-            let mut opts = std::fs::OpenOptions::new();
-            opts.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                opts.mode(0o600);
-            }
-            let mut f = opts.open(path).map_err(io_err)?;
-            f.write_all(hex.as_bytes()).map_err(io_err)?;
-            f.sync_all().map_err(io_err)?;
-            Ok(key)
-        }
-        Err(e) => Err(io_err(e)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(KeyError::File {
+            path: path.to_path_buf(),
+            source,
+        }),
     }
+}
+
+/// Writes `key` to a new `0600` file; fails if the file exists.
+fn file_write(path: &Path, key: &SecretKey) -> Result<(), KeyError> {
+    let io_err = |source| KeyError::File {
+        path: path.to_path_buf(),
+        source,
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(io_err)?;
+    }
+    let hex = data_encoding::HEXLOWER.encode(&key.to_bytes());
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(path).map_err(io_err)?;
+    f.write_all(hex.as_bytes()).map_err(io_err)?;
+    f.sync_all().map_err(io_err)
+}
+
+fn file_create(path: &Path) -> Result<SecretKey, KeyError> {
+    let key = SecretKey::generate();
+    file_write(path, &key)?;
+    Ok(key)
 }
 
 #[cfg(test)]
@@ -167,6 +240,22 @@ mod tests {
         let (b, loc) = load_or_create(&dirs, KeyStorage::Auto).unwrap();
         assert_eq!(loc, KeyLocation::File);
         assert_eq!(a.public(), b.public());
+    }
+
+    #[test]
+    fn no_new_identity_once_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let dirs = AppDirs::under(dir.path());
+        load_or_create(&dirs, KeyStorage::File).unwrap();
+        crate::db::Db::open(&dirs.db_file()).unwrap();
+        // The key is lost, but the device has data: refuse instead of
+        // creating a new identity.
+        std::fs::remove_file(dirs.key_file()).unwrap();
+        assert!(matches!(
+            load_or_create(&dirs, KeyStorage::File),
+            Err(KeyError::Missing(..))
+        ));
+        assert!(!dirs.key_file().exists());
     }
 
     #[test]
