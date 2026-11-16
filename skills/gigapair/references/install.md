@@ -128,14 +128,9 @@ Auto-accept lets that contact write to this disk without asking: set it only bec
 
 ## Update and remove
 
-**Update:** install the newer version the same way. Contacts, history and settings are kept. Then restart the service so it runs the new version:
+**Update:** install the newer version the same way. Contacts, history and settings are kept. A service that was running keeps the old version in memory until it restarts; the first `gigapair` command (or app launch) after the update notices and restarts it, printing `Restarted the Gigapair service: it was still running vX ...`. Interrupted transfers resume.
 
-```sh
-gigapair service stop
-gigapair service start
-```
-
-If `stop` fails with `... is not compatible with this client ...`, end the old process (`pkill -x gigapaird`, or `Stop-Process -Name gigapaird` in PowerShell) and run `gigapair service start`. Interrupted transfers resume.
+If instead it fails with `... is older than this program ... and restarting it didn't help`, an old `gigapaird` is still installed (a partial copy, or two installs on the `PATH`): install Gigapair again, and check that `gigapair --version` and `gigapaird --version` match.
 
 **Remove:** first `gigapair service uninstall` and `gigapair service stop`, then:
 

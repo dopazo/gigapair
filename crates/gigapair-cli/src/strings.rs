@@ -41,6 +41,12 @@ pub const START_TIMEOUT: &str = "the service did not start; check the log folder
 pub const NOT_RUNNING: &str = "The service is not running.";
 pub const STOPPED: &str = "The service was stopped.";
 
+pub fn service_restarted(from: &str, to: &str) -> String {
+    format!(
+        "Restarted the Gigapair service: it was still running v{from} from before an update; now v{to}."
+    )
+}
+
 pub fn name_question(default: &str) -> String {
     format!("Name for this contact [{default}]: ")
 }

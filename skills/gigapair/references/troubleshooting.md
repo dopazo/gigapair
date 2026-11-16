@@ -64,6 +64,8 @@ Interrupted transfers (a network cut, a restart, a reboot) resume by themselves 
 | Message or symptom | Cause and fix |
 | --- | --- |
 | `the running Gigapair service (vX) is not compatible with this client; ...` | Gigapair was updated but the old service is still running. `gigapair service stop`, then `gigapair service start`. If `stop` fails with the same error, end the old process (`pkill -x gigapaird`, or `Stop-Process -Name gigapaird` in PowerShell), then `gigapair service start` |
+| `the running Gigapair service (vX) is older than this program (vY) and restarting it didn't help ...` | The installed `gigapaird` is older than the CLI or app (a partial copy, or two installs on the `PATH`) | Install Gigapair again; `gigapair --version` and `gigapaird --version` must match |
+| `unknown setting "x"` for a setting the docs list | The running service is older than the CLI or app | Run any `gigapair` command: it restarts an older service. If that reports it is still older, see the row above |
 | `the service did not start; check the log folder` | `gigapaird` exited at startup. Read the newest `gigapaird.*.log` (see [Logs](#logs)) |
 | ``could not install the service: `systemctl ...` failed: ...`` | Linux without a systemd user manager for this user (a container, WSL without systemd, a `su` session). Log in as that user normally, or `loginctl enable-linger $USER` |
 | `gigapaird was not found next to gigapair; ...` | The four programs aren't in the same folder. Reinstall |

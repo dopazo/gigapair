@@ -2507,6 +2507,7 @@ dependencies = [
  "n0-future",
  "rand 0.10.3",
  "rusqlite",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",

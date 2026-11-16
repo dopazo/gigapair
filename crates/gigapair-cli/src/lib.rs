@@ -291,9 +291,13 @@ fn unreachable_service() -> Result<()> {
 
 async fn connect(dirs: &AppDirs) -> Result<Client> {
     match ipc::connect_or_spawn(dirs, "cli").await {
-        Ok((client, started)) => {
-            if started {
-                eprintln!("{}", s::SERVICE_STARTED);
+        Ok((client, state)) => {
+            match state {
+                ipc::ServiceState::Running => {}
+                ipc::ServiceState::Started => eprintln!("{}", s::SERVICE_STARTED),
+                ipc::ServiceState::Restarted { from } => {
+                    eprintln!("{}", s::service_restarted(&from, &client.service_version))
+                }
             }
             Ok(client)
         }

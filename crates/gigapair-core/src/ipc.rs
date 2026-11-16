@@ -32,6 +32,10 @@ pub enum IpcError {
         "the running Gigapair service (v{service}) is not compatible with this client; restart the service so both use the same version"
     )]
     Incompatible { service: String },
+    #[error(
+        "the running Gigapair service (v{service}) is older than this program (v{client}) and restarting it didn't help: an old gigapaird is still installed. Install Gigapair again so all its programs have the same version"
+    )]
+    Outdated { service: String, client: String },
     #[error("{0}")]
     Service(String),
     #[error("unexpected reply from the service")]
@@ -337,27 +341,122 @@ fn stop_std_handle_inheritance() {
     }
 }
 
+/// This program's version. Every Gigapair program is built from one
+/// workspace version, so the service should report the same one.
+pub const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// How [`connect_or_spawn`] found the service.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ServiceState {
+    /// It was already running.
+    Running,
+    /// It wasn't running and was started.
+    Started,
+    /// It was an older version (left running by an update) and was
+    /// restarted with the installed one.
+    Restarted { from: String },
+}
+
+/// Whether `service` is an older version than `client`. Unparsable
+/// versions (development builds, tests) never count as older.
+pub fn is_older(service: &str, client: &str) -> bool {
+    match (
+        semver::Version::parse(service),
+        semver::Version::parse(client),
+    ) {
+        (Ok(s), Ok(c)) => s < c,
+        _ => false,
+    }
+}
+
 /// Connects to the service, starting it first if it isn't running.
-/// Returns whether it had to be started.
+///
+/// A service older than this program is one an update left running (the
+/// old process keeps going while its files are replaced). It is restarted
+/// once per process so it runs the installed version; if it is still older
+/// afterwards, the old version is what's installed and the error says to
+/// reinstall. Only an older service is restarted, never a newer one, so two
+/// clients of different versions can't take turns restarting it.
 pub async fn connect_or_spawn(
     dirs: &AppDirs,
     client_name: &str,
-) -> Result<(Client, bool), IpcError> {
+) -> Result<(Client, ServiceState), IpcError> {
+    let (client, state) = connect_or_start(dirs, client_name).await?;
+    if !is_older(&client.service_version, CLIENT_VERSION) {
+        return Ok((client, state));
+    }
+    drop(client);
+    // One restart at a time: the app opens two connections at once.
+    let mut attempted = restart_lock().lock().await;
+    let (client, state) = connect_or_start(dirs, client_name).await?;
+    if !is_older(&client.service_version, CLIENT_VERSION) {
+        return Ok((client, state));
+    }
+    let outdated = IpcError::Outdated {
+        service: client.service_version.clone(),
+        client: CLIENT_VERSION.to_owned(),
+    };
+    if *attempted {
+        return Err(outdated);
+    }
+    *attempted = true;
+    let from = client.service_version.clone();
+    tracing::info!(
+        service = %from,
+        client = CLIENT_VERSION,
+        "restarting an older Gigapair service"
+    );
+    let mut client = client;
+    let _ = client.call(Request::Shutdown).await;
+    drop(client);
+    // Wait for the old process to let go of the socket.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    while tokio::time::Instant::now() < deadline {
+        match Client::connect(dirs, client_name).await {
+            Err(IpcError::NotRunning) => break,
+            _ => tokio::time::sleep(std::time::Duration::from_millis(150)).await,
+        }
+    }
+    let (client, _) = connect_or_start(dirs, client_name).await?;
+    if is_older(&client.service_version, CLIENT_VERSION) {
+        return Err(outdated);
+    }
+    Ok((client, ServiceState::Restarted { from }))
+}
+
+fn restart_lock() -> &'static tokio::sync::Mutex<bool> {
+    static LOCK: std::sync::OnceLock<tokio::sync::Mutex<bool>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(false))
+}
+
+async fn connect_or_start(
+    dirs: &AppDirs,
+    client_name: &str,
+) -> Result<(Client, ServiceState), IpcError> {
     match Client::connect(dirs, client_name).await {
-        Ok(c) => return Ok((c, false)),
+        Ok(c) => return Ok((c, ServiceState::Running)),
         Err(IpcError::NotRunning) => {}
         Err(e) => return Err(e),
     }
-    spawn_service(dirs)?;
+    start_service(dirs)?;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
     loop {
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
         match Client::connect(dirs, client_name).await {
-            Ok(c) => return Ok((c, true)),
+            Ok(c) => return Ok((c, ServiceState::Started)),
             Err(IpcError::NotRunning) if tokio::time::Instant::now() < deadline => continue,
             Err(e) => return Err(e),
         }
     }
+}
+
+/// Starts the service through the service manager when it is installed
+/// there (so it stays managed), otherwise as a detached process.
+fn start_service(dirs: &AppDirs) -> io::Result<()> {
+    if !dirs.custom_root && matches!(crate::service::start_managed(), Ok(true)) {
+        return Ok(());
+    }
+    spawn_service(dirs)
 }
 
 #[cfg(test)]
@@ -402,6 +501,18 @@ mod tests {
         let err = client.call(Request::Contacts).await.unwrap_err();
         assert!(matches!(err, IpcError::Service(m) if m == "nope"));
         server.await.unwrap();
+    }
+
+    #[test]
+    fn older_service_versions() {
+        assert!(is_older("0.1.0-beta.1", "0.1.0-beta.2"));
+        assert!(is_older("0.1.0-beta.3", "0.1.0"));
+        assert!(is_older("0.1.0", "0.2.0"));
+        assert!(!is_older("0.1.0-beta.2", "0.1.0-beta.2"));
+        // A newer service is left alone.
+        assert!(!is_older("0.1.0", "0.1.0-beta.3"));
+        assert!(!is_older("test", "0.1.0"));
+        assert!(!is_older("unknown", "0.1.0"));
     }
 
     #[tokio::test]
