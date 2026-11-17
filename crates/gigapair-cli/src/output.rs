@@ -2,9 +2,11 @@
 
 use gigapair_core::api::same_network_hint;
 use gigapair_core::types::{
-    ConnKind, Contact, Direction, TransferInfo, TransferStatus, format_bytes, format_duration,
-    short_id,
+    ConnKind, Contact, Direction, TransferDetails, TransferInfo, TransferStatus, format_bytes,
+    format_duration, short_id,
 };
+
+use crate::strings as s;
 
 /// The pairing code as a QR made of Unicode half blocks.
 pub fn render_qr(code: &str) -> Option<String> {
@@ -109,6 +111,31 @@ pub fn progress_line(t: &TransferInfo) -> String {
         line.push_str(&format!("  {note}"));
     }
     line
+}
+
+/// `gigapair show`: the transfer's line, where it is, and its files.
+pub fn print_details(d: &TransferDetails) {
+    print_transfers(std::slice::from_ref(&d.transfer));
+    if d.locations.is_empty() {
+        println!("{}", s::NO_LOCATIONS);
+    } else {
+        println!("{}", s::LOCATIONS);
+        for l in &d.locations {
+            println!("  {l}");
+        }
+    }
+    println!("{}", s::FILES);
+    for f in &d.files {
+        println!(
+            "  {} {}  {}",
+            if f.done { "✓" } else { "·" },
+            f.path,
+            format_bytes(f.size)
+        );
+    }
+    if d.more_files > 0 {
+        println!("{}", s::more_files(d.more_files));
+    }
 }
 
 #[cfg(test)]

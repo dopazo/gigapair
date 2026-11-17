@@ -118,8 +118,11 @@ Not in scope for v1: one-to-many or swarm transfers, cloud storage or store-and-
 ## Desktop app
 
 1. **Pair:** click **Add contact**. Send the code (or a photo of the QR) to the other person by any channel. They paste it in **Add contact**. Check that the 4-word fingerprint matches on both screens and name the contact.
-2. **Send:** drag files or folders onto the contact.
+2. **Send:** drag files or folders onto the contact (in the list on the left, or anywhere on its page), or use **Choose files…** (Ctrl+O, ⌘O on macOS). Sending to an offline contact queues the transfer until it comes back.
 3. **Receive:** accept the incoming request, or turn on **Auto-accept** for that contact.
+4. **Find it later:** **History** lists finished transfers, with a search box (name or contact) and filters. **Details** shows the files, when it ran, the whole error and where the files are; **Show in folder** opens the file manager with them selected; **Remove from history** deletes one entry. The contact's page shows the last few transfers with it.
+
+Keyboard shortcuts are listed in Settings: Ctrl+O / Ctrl+Shift+O to send files or a folder, Ctrl+1…9 to open a contact, Ctrl+N to add one, Ctrl+F to search the history, Ctrl+, for the settings (⌘ instead of Ctrl on macOS). Enter saves the field you are typing in; Esc cancels a rename or a "click again" button.
 
 Closing the window keeps Gigapair in the system tray (the notification area on Windows, the panel on Linux), showing the overall progress. Click the tray icon to bring the window back; quit from its menu. Quitting the app doesn't stop transfers: the background service keeps them going. To make the close button quit instead, turn off **Keep Gigapair in the tray** in Settings (`gigapair config set close_to_tray off`). Launching the app again while it's in the tray shows the existing window. `gigapair-app --background` starts it in the tray without opening the window.
 
@@ -142,7 +145,8 @@ The CLI binary is `gigapair` (optional short alias: `gpair`). Every command acce
 | `gigapair accept <id> [--to <folder>]` | Accept a request, into the download folder or `--to` another one |
 | `gigapair reject <id>` | Reject a request |
 | `gigapair status [--watch]` | Active transfers, speed and connection type; `--watch` refreshes until Ctrl+C |
-| `gigapair history [--limit <n>] [--clear]` | Finished transfers (the last 50 by default); `--clear` deletes the history |
+| `gigapair history [--limit <n>] [--clear] [--remove <id>]` | Finished transfers (the last 50 by default); `--clear` deletes the history, `--remove` one entry. Received files stay; the unfinished data of a failed download is deleted |
+| `gigapair show <id>` | One transfer's details: its files and where they are on this device |
 | `gigapair pause <id>` / `resume <id>` | Pause or resume a transfer |
 | `gigapair cancel <id>` | Cancel a transfer |
 | `gigapair retry <id>` | Send a failed or cancelled transfer again |

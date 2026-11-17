@@ -194,6 +194,9 @@ async fn folder_transfer_with_manual_accept() {
     };
     assert_eq!(reqs.len(), 1);
     wait_for(&a, &id, "waiting", status_is(TransferStatus::WaitingAccept)).await;
+    // Only finished transfers can leave the history.
+    let r = b.handle(Request::HistoryRemove { id: id.clone() }).await;
+    assert!(matches!(r, Response::Error { .. }), "{r:?}");
 
     let dest = tmp.path().join("chosen");
     let r = b
@@ -240,6 +243,40 @@ async fn folder_transfer_with_manual_accept() {
         assert_eq!(h.len(), 1);
         assert!(h[0].conn.is_some(), "connection type is recorded");
     }
+
+    // Details: files and where they are on each side.
+    let Response::Details(d) = b.handle(Request::TransferDetails { id: id.clone() }).await else {
+        panic!()
+    };
+    assert_eq!(d.files.len(), 4);
+    assert!(d.files.iter().all(|f| f.done));
+    let mut want = vec![
+        got.display().to_string(),
+        dest.join("single.bin").display().to_string(),
+    ];
+    let mut locations = d.locations.clone();
+    locations.sort();
+    want.sort();
+    assert_eq!(locations, want);
+    let Response::Details(d) = a.handle(Request::TransferDetails { id: id.clone() }).await else {
+        panic!()
+    };
+    assert!(d.files.iter().all(|f| f.done));
+    assert_eq!(
+        d.locations,
+        vec![src.display().to_string(), single.display().to_string()]
+    );
+
+    // Removing one entry from the history leaves the files.
+    let r = b
+        .handle(Request::HistoryRemove { id: id[..8].into() })
+        .await;
+    assert_eq!(r, Response::Ok);
+    let Response::Transfers(h) = b.handle(Request::History { limit: 10 }).await else {
+        panic!()
+    };
+    assert!(h.is_empty());
+    assert!(got.join("notes.txt").exists());
 
     a.shutdown().await;
     b.shutdown().await;

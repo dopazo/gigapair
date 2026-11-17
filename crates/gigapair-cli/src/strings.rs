@@ -10,6 +10,14 @@ pub const ACCEPTED: &str = "Accepted";
 pub const REJECTED: &str = "Rejected";
 pub const HISTORY_CLEARED: &str = "History cleared.";
 pub const NO_HISTORY: &str = "No finished transfers yet.";
+pub const HISTORY_REMOVED: &str = "Removed from the history. The files were not touched.";
+pub const LOCATIONS: &str = "On this device:";
+pub const NO_LOCATIONS: &str = "On this device: nothing yet";
+pub const FILES: &str = "Files:";
+
+pub fn more_files(n: u64) -> String {
+    format!("  … and {n} more")
+}
 pub const NO_ACTIVE: &str = "No active transfers.";
 pub const NO_CONTACTS: &str = "No contacts yet. Run `gigapair pair` here, or `gigapair pair <code>` with the other device's code.";
 pub const SENDING_AGAIN: &str = "Sending again as transfer";
