@@ -43,7 +43,7 @@ pub enum IpcError {
 }
 
 /// Where the service listens.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SocketAddr {
     Path(PathBuf),
     Pipe(String),
@@ -70,19 +70,39 @@ pub fn app_socket_addr(dirs: &AppDirs) -> SocketAddr {
     local_addr(dirs, "gigapair-app", "app.sock")
 }
 
+/// Where clients look for the service: its address, then the one an older
+/// version would use for the same folder ([`AppDirs::legacy_instance_tag`]),
+/// so a service that an update left running is still found and restarted.
+fn service_addrs(dirs: &AppDirs) -> Vec<SocketAddr> {
+    let current = socket_addr(dirs);
+    let legacy = tagged_addr(
+        dirs,
+        "gigapair",
+        "gigapaird.sock",
+        &dirs.legacy_instance_tag(),
+    );
+    if legacy == current {
+        vec![current]
+    } else {
+        vec![current, legacy]
+    }
+}
+
 /// A named pipe `<stem>-<instance>` on Windows, `<data>/<file>` elsewhere.
 fn local_addr(dirs: &AppDirs, stem: &str, file: &str) -> SocketAddr {
+    tagged_addr(dirs, stem, file, &dirs.instance_tag())
+}
+
+fn tagged_addr(dirs: &AppDirs, stem: &str, file: &str, tag: &str) -> SocketAddr {
     if cfg!(windows) {
-        SocketAddr::Pipe(format!("{stem}-{}", dirs.instance_tag()))
+        SocketAddr::Pipe(format!("{stem}-{tag}"))
     } else {
         let path = dirs.data.join(file);
         // Unix socket paths are limited to ~104 bytes.
         if path.as_os_str().len() < 100 {
             SocketAddr::Path(path)
         } else {
-            SocketAddr::Path(
-                std::env::temp_dir().join(format!("{stem}-{}.sock", dirs.instance_tag())),
-            )
+            SocketAddr::Path(std::env::temp_dir().join(format!("{stem}-{tag}.sock")))
         }
     }
 }
@@ -179,18 +199,23 @@ pub struct Client {
 impl Client {
     /// Connects and performs the version handshake.
     pub async fn connect(dirs: &AppDirs, client_name: &str) -> Result<Self, IpcError> {
-        let addr = socket_addr(dirs);
-        let stream = match Stream::connect(to_name(&addr)?).await {
-            Ok(s) => s,
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
-                ) =>
-            {
-                return Err(IpcError::NotRunning);
+        let mut found = None;
+        for addr in service_addrs(dirs) {
+            match Stream::connect(to_name(&addr)?).await {
+                Ok(s) => {
+                    found = Some(s);
+                    break;
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
+                    ) => {}
+                Err(e) => return Err(e.into()),
             }
-            Err(e) => return Err(e.into()),
+        }
+        let Some(stream) = found else {
+            return Err(IpcError::NotRunning);
         };
         let mut conn = Conn::new(stream);
         conn.send(&Request::Hello {
