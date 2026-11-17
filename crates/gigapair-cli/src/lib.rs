@@ -17,7 +17,7 @@ use gigapair_core::ipc::{self, Client, IpcError};
 use gigapair_core::service;
 use gigapair_core::types::{PendingPair, TransferInfo, TransferStatus, now_secs, short_id};
 
-use crate::output::{print_contacts, print_transfers, progress_line, render_qr};
+use crate::output::{print_contacts, print_details, print_transfers, progress_line, render_qr};
 use crate::strings as s;
 
 #[derive(Parser)]
@@ -85,9 +85,14 @@ enum Command {
         #[arg(long, default_value_t = 50)]
         limit: u32,
         /// Delete the history.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "remove")]
         clear: bool,
+        /// Remove one finished transfer from the history (files stay).
+        #[arg(long, value_name = "ID")]
+        remove: Option<String>,
     },
+    /// Details of one transfer: its files and where they are.
+    Show { id: String },
     /// Pause a transfer.
     Pause { id: String },
     /// Resume a paused transfer.
@@ -264,7 +269,16 @@ async fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Command::Status { watch } => status(&dirs, &mut client, watch).await,
-        Command::History { limit, clear } => {
+        Command::History {
+            limit,
+            clear,
+            remove,
+        } => {
+            if let Some(id) = remove {
+                client.call(Request::HistoryRemove { id }).await?;
+                println!("{}", s::HISTORY_REMOVED);
+                return Ok(());
+            }
             if clear {
                 client.call(Request::ClearHistory).await?;
                 println!("{}", s::HISTORY_CLEARED);
@@ -278,6 +292,13 @@ async fn run(cli: Cli) -> Result<()> {
             }
             Ok(())
         }
+        Command::Show { id } => match client.call(Request::TransferDetails { id }).await? {
+            Response::Details(d) => {
+                print_details(&d);
+                Ok(())
+            }
+            other => Err(unexpected(other)),
+        },
         Command::Pause { id } => simple(&mut client, Request::Pause { id }).await,
         Command::Resume { id } => simple(&mut client, Request::Resume { id }).await,
         Command::Cancel { id } => simple(&mut client, Request::Cancel { id }).await,

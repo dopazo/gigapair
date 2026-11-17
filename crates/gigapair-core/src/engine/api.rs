@@ -7,7 +7,10 @@ use std::sync::atomic::Ordering;
 use super::{EngineError, EngineResult, Inner, recv, send};
 use crate::api::{ConfigEntry, Event, Request, Response, StatusInfo};
 use crate::config::KEYS;
-use crate::types::{Contact, Direction, TransferInfo, TransferStatus, short_id};
+use crate::types::{
+    Contact, DETAILS_MAX_FILES, Direction, FileEntry, TransferDetails, TransferInfo,
+    TransferStatus, short_id,
+};
 use crate::wire::{Notice, PROTOCOL_VERSION, PeerRequest};
 
 impl super::Engine {
@@ -165,8 +168,33 @@ impl Inner {
                     .collect(),
             ),
             Request::ClearHistory => {
+                // A failed download keeps its partial data for a retry;
+                // without the row nothing could resume or delete it.
+                for row in self.db.history(u32::MAX)? {
+                    if row.direction == Direction::Receive {
+                        recv::cleanup_partial(&row);
+                    }
+                }
                 self.db.clear_history()?;
                 Response::Ok
+            }
+            Request::HistoryRemove { id } => {
+                let id = self.resolve_transfer(&id)?;
+                let row = self.row(&id)?;
+                if !row.status.is_terminal() {
+                    return Err(EngineError::user(
+                        "this transfer hasn't finished; cancel it first, then remove it",
+                    ));
+                }
+                if row.direction == Direction::Receive {
+                    recv::cleanup_partial(&row);
+                }
+                self.db.delete_transfer(&id)?;
+                Response::Ok
+            }
+            Request::TransferDetails { id } => {
+                let id = self.resolve_transfer(&id)?;
+                Response::Details(self.details(&id)?)
             }
             Request::Pause { id } => {
                 let id = self.resolve_transfer(&id)?;
@@ -330,6 +358,51 @@ impl Inner {
                 "{q} matches several transfers; use more characters"
             ))),
         }
+    }
+
+    fn details(&self, id: &str) -> EngineResult<TransferDetails> {
+        let row = self.row(id)?;
+        let files = self.db.files(id)?;
+        let locations = match row.direction {
+            Direction::Send => row.sources.clone(),
+            Direction::Receive => {
+                // A top-level folder once (however many files it holds),
+                // each top-level file on its own.
+                let mut folders: Vec<&str> = Vec::new();
+                let mut out: Vec<String> = Vec::new();
+                let dest = row.dest_dir.as_deref().map(std::path::Path::new);
+                for f in files.iter().filter(|f| f.done) {
+                    match (recv::split_root(&f.rel_path), dest) {
+                        ((root, Some(_)), Some(dest)) => {
+                            if folders.contains(&root) {
+                                continue;
+                            }
+                            folders.push(root);
+                            if let Some(name) = self.db.root_name(id, root)? {
+                                out.push(dest.join(name).display().to_string());
+                            }
+                        }
+                        _ => out.extend(f.final_path.clone()),
+                    }
+                }
+                out
+            }
+        };
+        let all_sent = row.direction == Direction::Send && row.status == TransferStatus::Completed;
+        Ok(TransferDetails {
+            transfer: self.info(&row),
+            more_files: files.len().saturating_sub(DETAILS_MAX_FILES) as u64,
+            files: files
+                .into_iter()
+                .take(DETAILS_MAX_FILES)
+                .map(|f| FileEntry {
+                    path: f.rel_path,
+                    size: f.size,
+                    done: f.done || all_sent,
+                })
+                .collect(),
+            locations,
+        })
     }
 
     fn row(&self, id: &str) -> EngineResult<crate::db::TransferRow> {

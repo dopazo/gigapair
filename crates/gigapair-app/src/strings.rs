@@ -22,7 +22,6 @@ pub const REMOVE: &str = "Remove contact";
 pub const REMOVE_CONFIRM: &str = "Click again to remove";
 
 pub const INCOMING: &str = "Incoming requests";
-pub const NO_TRANSFERS: &str = "No active transfers.";
 pub const ACCEPT: &str = "Accept";
 pub const ACCEPT_TO: &str = "Accept to…";
 pub const REJECT: &str = "Reject";
@@ -30,8 +29,33 @@ pub const PAUSE: &str = "Pause";
 pub const RESUME: &str = "Resume";
 pub const CANCEL: &str = "Cancel";
 pub const RETRY: &str = "Retry";
-pub const OPEN_FOLDER: &str = "Open folder";
+pub const SHOW_IN_FOLDER: &str = "Show in folder";
 pub const CLEAR_HISTORY: &str = "Clear history";
+pub const CLEAR_HISTORY_CONFIRM: &str = "Click again to clear";
+pub const HISTORY_CLEARED: &str = "History cleared. Received files stay where they are.";
+pub const SEARCH_HISTORY: &str = "Search by name or contact";
+pub const FILTER_ALL: &str = "All";
+pub const FILTER_SENT: &str = "Sent";
+pub const FILTER_RECEIVED: &str = "Received";
+pub const FILTER_COMPLETED: &str = "Completed";
+pub const FILTER_PROBLEMS: &str = "Not completed";
+pub const NO_MATCHES: &str = "No transfers match these filters.";
+pub const CLEAR_FILTERS: &str = "Clear filters";
+pub const SHOW_MORE: &str = "Show older";
+pub const DETAILS: &str = "Details";
+pub const HIDE_DETAILS: &str = "Hide";
+pub const LOADING: &str = "Loading…";
+pub const REMOVE_FROM_HISTORY: &str = "Remove from history";
+pub const REMOVED_FROM_HISTORY: &str =
+    "Removed from the history. Received files stay where they are.";
+pub const ON_THIS_DEVICE: &str = "On this device";
+pub const NOT_ON_DEVICE: &str = "Nothing from this transfer was saved on this device.";
+pub const NOT_FOUND: &str =
+    "The files are no longer where Gigapair left them: they were moved, renamed or deleted.";
+pub const RECENT: &str = "Recent";
+pub const SEE_ALL: &str = "See all in history";
+pub const SAVED: &str = "Saved";
+pub const SETTINGS_SHORTCUTS: &str = "Keyboard shortcuts";
 pub const NO_HISTORY: &str = "No finished transfers yet.";
 pub const DIRECT: &str = "Direct";
 pub const RELAY_SLOWER: &str =
@@ -220,4 +244,76 @@ pub fn cancelled_at(percent: f64) -> String {
 
 pub fn rejected_by(name: &str) -> String {
     format!("Rejected by {name}")
+}
+
+/// A shortcut as written on this system: `Ctrl+O`, or `⌘O` on macOS.
+pub fn key(k: &str) -> String {
+    if cfg!(target_os = "macos") {
+        format!("⌘{k}")
+    } else {
+        format!("Ctrl+{k}")
+    }
+}
+
+/// `Ctrl+Shift+O`, or `⇧⌘O` on macOS.
+pub fn key_shift(k: &str) -> String {
+    if cfg!(target_os = "macos") {
+        format!("⇧⌘{k}")
+    } else {
+        format!("Ctrl+Shift+{k}")
+    }
+}
+
+/// The shortcut list in the settings: keys, then what they do.
+pub fn shortcuts() -> Vec<(String, &'static str)> {
+    vec![
+        (key("O"), "Send files to the open contact"),
+        (key_shift("O"), "Send a folder to the open contact"),
+        (format!("{} … {}", key("1"), key("9")), "Open a contact"),
+        (key("N"), "Add a contact"),
+        (key("F"), "Search the history"),
+        (key(","), "Settings"),
+        (
+            "Enter".to_owned(),
+            "Save or confirm the field you are typing in",
+        ),
+        (
+            "Esc".to_owned(),
+            "Cancel renaming, or a \"click again\" button",
+        ),
+    ]
+}
+
+pub fn no_transfers_hint(name: &str) -> String {
+    format!(
+        "Nothing on the way. Drop files anywhere on this page, or press {}, to send them to {name}.",
+        key("O")
+    )
+}
+
+pub fn offline_hint(name: &str) -> String {
+    format!(
+        "{name} is offline. What you send waits in the queue and starts on its own when {name} is back."
+    )
+}
+
+pub fn renamed(name: &str) -> String {
+    format!("Renamed to {name}")
+}
+
+pub fn contact_removed(name: &str) -> String {
+    format!("{name} was removed from your contacts")
+}
+
+pub fn file_count_title(n: u64) -> String {
+    format!("Files ({n})")
+}
+
+pub fn more_files(n: u64) -> String {
+    format!("… and {n} more")
+}
+
+/// When a finished transfer started and ended, and how long it took.
+pub fn timing(started: &str, finished: &str, took: &str) -> String {
+    format!("Started {started}, finished {finished} ({took}, including any wait for an answer)")
 }

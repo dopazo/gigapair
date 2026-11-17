@@ -959,7 +959,7 @@ fn root_dir(db: &Db, dest: &Path, id: &str, wire_root: &str) -> std::io::Result<
 }
 
 /// Splits a wire path into its root and the rest.
-fn split_root(rel: &str) -> (&str, Option<&str>) {
+pub(super) fn split_root(rel: &str) -> (&str, Option<&str>) {
     let rel = rel.trim_start_matches('/');
     match rel.split_once('/') {
         Some((root, rest)) if !rest.trim_matches('/').is_empty() => (root, Some(rest)),

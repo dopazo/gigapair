@@ -27,7 +27,8 @@
 | `gigapair accept <id> [--to <folder>]` | Accept, into the download folder or `--to` another one (created if missing) |
 | `gigapair reject <id>` | Reject a request |
 | `gigapair status [--watch]` | Device summary plus active transfers. `--watch` redraws until Ctrl+C (don't use it from an agent) |
-| `gigapair history [--limit <n>] [--clear]` | Finished transfers, newest first (50 by default). `--clear` deletes them |
+| `gigapair history [--limit <n>] [--clear] [--remove <id>]` | Finished transfers, newest first (50 by default). `--clear` deletes them, `--remove <id>` one (it must have finished). Received files stay; the unfinished data of a failed download is deleted, so it can't be retried |
+| `gigapair show <id>` | One transfer: its line as in `history`, then `On this device:` (the top-level files and folders: what was sent, or where they were saved) and `Files:` (`✓` received and verified, `·` not yet; the first 500) |
 | `gigapair pause <id>` / `resume <id>` | Pause or resume an active transfer |
 | `gigapair cancel <id>` | Cancel a transfer; the other side is told |
 | `gigapair retry <id>` | Send a failed or cancelled transfer again, as a new transfer with a new id. Sender side only |

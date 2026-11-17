@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{Contact, PendingPair, TransferInfo};
+use crate::types::{Contact, PendingPair, TransferDetails, TransferInfo};
 use crate::update::UpdateInfo;
 
 /// Bumped on incompatible changes to [`Request`], [`Response`] or [`Event`].
@@ -72,6 +72,16 @@ pub enum Request {
         limit: u32,
     },
     ClearHistory,
+    /// Removes one finished transfer from the history. `id` may be a
+    /// unique prefix. Files are not touched.
+    HistoryRemove {
+        id: String,
+    },
+    /// One transfer with its files and locations. Answered with
+    /// [`Response::Details`].
+    TransferDetails {
+        id: String,
+    },
     Pause {
         id: String,
     },
@@ -137,6 +147,7 @@ pub enum Response {
     Transfers(Vec<TransferInfo>),
     Config(Vec<ConfigEntry>),
     Update(UpdateInfo),
+    Details(TransferDetails),
     Error {
         message: String,
     },
@@ -302,6 +313,16 @@ mod tests {
                 }),
                 releases_url: "r".into(),
             }),
+            Response::Details(TransferDetails {
+                transfer: sample_transfer(),
+                files: vec![crate::types::FileEntry {
+                    path: "a/b.txt".into(),
+                    size: 3,
+                    done: true,
+                }],
+                more_files: 0,
+                locations: vec!["/x/a".into()],
+            }),
             Response::Error {
                 message: "e".into(),
             },
@@ -331,6 +352,8 @@ mod tests {
             Request::ConfigGet { key: None },
             Request::History { limit: 3 },
             Request::CheckUpdate,
+            Request::HistoryRemove { id: "ab".into() },
+            Request::TransferDetails { id: "ab".into() },
         ] {
             roundtrip(r);
         }

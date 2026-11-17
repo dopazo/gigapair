@@ -201,6 +201,34 @@ impl TransferInfo {
     }
 }
 
+/// One transfer with its files and where they are on this device, for a
+/// details view (`Request::TransferDetails`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransferDetails {
+    pub transfer: TransferInfo,
+    /// The first [`DETAILS_MAX_FILES`] files, in transfer order.
+    pub files: Vec<FileEntry>,
+    /// Files left out of `files`.
+    pub more_files: u64,
+    /// The top-level files and folders on this device: what was chosen
+    /// (sender) or where they were saved (receiver; only those already in
+    /// place). For "show in folder".
+    pub locations: Vec<String>,
+}
+
+/// Files listed in [`TransferDetails`]; a folder can hold many more.
+pub const DETAILS_MAX_FILES: usize = 500;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// `/`-separated path relative to the transfer.
+    pub path: String,
+    pub size: u64,
+    /// Received and verified (receiver). The sender doesn't track files
+    /// one by one: all are done once the transfer completes.
+    pub done: bool,
+}
+
 /// First 8 characters of an id, as shown in lists.
 pub fn short_id(id: &str) -> &str {
     id.get(..8).unwrap_or(id)

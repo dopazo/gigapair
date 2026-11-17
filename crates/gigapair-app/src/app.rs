@@ -10,13 +10,13 @@ use std::time::Duration;
 use gigapair_core::api::{Event, RELAY_NOTICE, Request, Response, StatusInfo, same_network_hint};
 use gigapair_core::dirs::AppDirs;
 use gigapair_core::types::{
-    ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferInfo, TransferStatus,
-    format_bytes, format_duration, now_secs,
+    ConnInfo, ConnKind, Contact, Direction, PendingPair, TransferDetails, TransferInfo,
+    TransferStatus, format_bytes, format_duration, now_secs,
 };
 use gigapair_core::update::UpdateInfo;
 use gpui_kit::base::{SelectableText, TextSelection};
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants};
-use gpui_kit::component::input::{Input, InputState};
+use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::{ContextMenuExt, PopupMenuItem};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::switch::Switch;
@@ -27,9 +27,9 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
     AnyElement, AppContext, ClipboardItem, Context, Div, Entity, ExternalPaths, FontFeatures,
-    FontWeight, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    PathPromptOptions, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Svg,
-    Window, div, px, svg,
+    FontWeight, Hsla, InteractiveElement, IntoElement, Keystroke, MouseButton, ParentElement,
+    PathPromptOptions, Render, SharedString, Stateful, StatefulInteractiveElement, Styled,
+    Subscription, Svg, Window, div, px, svg,
 };
 
 use crate::backend::{Backend, BackendMsg};
@@ -78,7 +78,34 @@ pub struct GigapairApp {
     device_input: Entity<InputState>,
     relay_input: Entity<InputState>,
     limit_input: Entity<InputState>,
+    /// "Clear history" was clicked once; the next click clears it.
+    clear_armed: bool,
+    history_search: Entity<InputState>,
+    history_dir: Option<Direction>,
+    history_outcome: Outcome,
+    /// Finished transfers loaded; "Show older" raises it.
+    history_limit: u32,
+    /// The service may hold older finished transfers than were loaded.
+    history_more: bool,
+    /// History rows showing their details, with the details once loaded.
+    expanded: HashMap<String, Option<TransferDetails>>,
+    _subscriptions: Vec<Subscription>,
 }
+
+/// The history's "how it ended" filter.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Outcome {
+    All,
+    Completed,
+    /// Failed, cancelled or rejected.
+    Problems,
+}
+
+/// Finished transfers loaded at first, and added by each "Show older".
+const HISTORY_PAGE: u32 = 200;
+
+/// Files listed in a history row's details (the service sends more).
+const DETAILS_FILES_SHOWN: usize = 20;
 
 type Done = Box<dyn FnOnce(&mut GigapairApp, Response, &mut Window, &mut Context<GigapairApp>)>;
 
@@ -118,6 +145,58 @@ impl GigapairApp {
             cx.new(|cx| InputState::new(window, cx).placeholder(placeholder))
         };
 
+        let code_input = input(s::CODE_PLACEHOLDER, window, cx);
+        let rename_input = input(s::NAME_PLACEHOLDER, window, cx);
+        let device_input = input(s::SETTINGS_DEVICE, window, cx);
+        let relay_input = input("https://relay.example.com", window, cx);
+        let limit_input = input("0", window, cx);
+        let history_search = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(s::SEARCH_HISTORY)
+                .clean_on_escape()
+        });
+
+        // Enter in a field does what its button does.
+        let on_enter = |input: &Entity<InputState>,
+                        window: &mut Window,
+                        cx: &mut Context<Self>,
+                        f: fn(&mut Self, &mut Window, &mut Context<Self>)| {
+            cx.subscribe_in(input, window, move |app, _, ev: &InputEvent, window, cx| {
+                if let InputEvent::PressEnter { .. } = ev {
+                    f(app, window, cx)
+                }
+            })
+        };
+        let weak = cx.entity().downgrade();
+        let subscriptions = vec![
+            on_enter(&code_input, window, cx, Self::join_code),
+            on_enter(&rename_input, window, cx, Self::save_rename),
+            on_enter(&device_input, window, cx, |app, window, cx| {
+                app.save_input("device_name", app.device_input.clone(), window, cx)
+            }),
+            on_enter(&relay_input, window, cx, |app, window, cx| {
+                app.save_input("relay_url", app.relay_input.clone(), window, cx)
+            }),
+            on_enter(&limit_input, window, cx, |app, window, cx| {
+                app.save_input("upload_limit_kib", app.limit_input.clone(), window, cx)
+            }),
+            cx.subscribe_in(&history_search, window, |_, _, ev: &InputEvent, _, cx| {
+                if let InputEvent::Change = ev {
+                    cx.notify()
+                }
+            }),
+            // Before any element sees the keys, so they work wherever the
+            // focus is (an input included).
+            cx.intercept_keystrokes(move |event, window, cx| {
+                let handled = weak
+                    .update(cx, |app, cx| app.on_shortcut(&event.keystroke, window, cx))
+                    .unwrap_or(false);
+                if handled {
+                    cx.stop_propagation();
+                }
+            }),
+        ];
+
         Self {
             backend,
             connected: false,
@@ -139,12 +218,20 @@ impl GigapairApp {
             start_at_login: gigapair_core::service::status().ok().map(|s| s.installed),
             logs_dir: AppDirs::from_env().ok().map(|d| d.logs),
             update: UpdateCheck::NotYet,
-            code_input: input(s::CODE_PLACEHOLDER, window, cx),
+            code_input,
             pair_name_inputs: HashMap::new(),
-            rename_input: input(s::NAME_PLACEHOLDER, window, cx),
-            device_input: input(s::SETTINGS_DEVICE, window, cx),
-            relay_input: input("https://relay.example.com", window, cx),
-            limit_input: input("0", window, cx),
+            rename_input,
+            device_input,
+            relay_input,
+            limit_input,
+            clear_armed: false,
+            history_search,
+            history_dir: None,
+            history_outcome: Outcome::All,
+            history_limit: HISTORY_PAGE,
+            history_more: false,
+            expanded: HashMap::new(),
+            _subscriptions: subscriptions,
         }
     }
 
@@ -268,11 +355,14 @@ impl GigapairApp {
 
     fn load_history(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.call(
-            Request::History { limit: 200 },
+            Request::History {
+                limit: self.history_limit,
+            },
             window,
             cx,
             |app, r, _, cx| {
                 if let Response::Transfers(list) = r {
+                    app.history_more = list.len() as u32 >= app.history_limit;
                     app.history = list;
                     cx.notify();
                 }
@@ -417,6 +507,17 @@ impl GigapairApp {
                     .placeholder(s::NAME_PLACEHOLDER)
                     .default_value(name)
             });
+            let id = p.id.clone();
+            let sub = cx.subscribe_in(
+                &input,
+                window,
+                move |app, _, ev: &InputEvent, window, cx| {
+                    if let InputEvent::PressEnter { .. } = ev {
+                        app.confirm_pair(id.clone(), window, cx)
+                    }
+                },
+            );
+            self._subscriptions.push(sub);
             self.pair_name_inputs.insert(p.id.clone(), input);
         }
     }
@@ -500,6 +601,273 @@ impl GigapairApp {
             }
         })
         .detach();
+    }
+
+    /// Switches page, dropping any half-done "click again" or rename.
+    fn go(&mut self, page: Page, cx: &mut Context<Self>) {
+        self.page = page;
+        self.disarm();
+        self.renaming = false;
+        cx.notify();
+    }
+
+    /// Cancels every "click again to …" button. Returns whether one was
+    /// armed.
+    fn disarm(&mut self) -> bool {
+        let was = self.remove_armed || self.reset_armed || self.clear_armed;
+        self.remove_armed = false;
+        self.reset_armed = false;
+        self.clear_armed = false;
+        was
+    }
+
+    /// The window's keyboard shortcuts (listed by `s::shortcuts`). Returns
+    /// whether the key was used.
+    fn on_shortcut(&mut self, k: &Keystroke, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let m = &k.modifiers;
+        if k.key == "escape" && !m.modified() {
+            if self.renaming {
+                self.renaming = false;
+                cx.notify();
+                return true;
+            }
+            if self.disarm() {
+                cx.notify();
+                return true;
+            }
+            return false;
+        }
+        if !m.secondary(cx) || m.alt {
+            return false;
+        }
+        let contact = match &self.page {
+            Page::Contact(id) => Some(id.clone()),
+            _ => None,
+        };
+        match (k.key.as_str(), m.shift) {
+            ("o", shift) => {
+                let Some(id) = contact else { return false };
+                self.pick_and_send(id, shift, window, cx);
+            }
+            ("n", false) => self.go(Page::AddContact, cx),
+            (",", false) => self.go(Page::Settings, cx),
+            ("f", false) => {
+                self.go(Page::History, cx);
+                self.history_search.update(cx, |i, cx| i.focus(window, cx));
+            }
+            (d, false) if d.len() == 1 && ("1"..="9").contains(&d) => {
+                let n = d.parse::<usize>().unwrap_or(1) - 1;
+                let Some(c) = self.contacts.get(n) else {
+                    return false;
+                };
+                let page = Page::Contact(c.node_id.clone());
+                self.go(page, cx);
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// "Connect" on the Add contact page (or Enter in the code field).
+    fn join_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let code = self.code_input.read(cx).value().to_string();
+        if code.trim().is_empty() {
+            return;
+        }
+        self.call(
+            Request::PairJoin { code },
+            window,
+            cx,
+            |app, r, window, cx| {
+                if let Response::PendingPair(p) = r {
+                    app.ensure_name_input(&p, window, cx);
+                    app.pending_pairs.retain(|x| x.id != p.id);
+                    app.pending_pairs.push(p);
+                    app.code_input
+                        .update(cx, |i, cx| i.set_value("", window, cx));
+                    cx.notify();
+                }
+            },
+        );
+    }
+
+    /// "Words match, pair" (or Enter in the name field).
+    fn confirm_pair(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        let name = self
+            .pair_name_inputs
+            .get(&id)
+            .map(|i| i.read(cx).value().to_string())
+            .unwrap_or_default();
+        self.call(
+            Request::PairConfirm {
+                id: id.clone(),
+                name,
+            },
+            window,
+            cx,
+            move |app, r, window, cx| {
+                app.pending_pairs.retain(|p| p.id != id);
+                if let Response::Contact(c) = r {
+                    app.pair_code = None;
+                    app.page = Page::Contact(c.node_id);
+                    app.load_contacts(window, cx);
+                }
+                cx.notify();
+            },
+        );
+    }
+
+    /// Saves the open contact's new name (button or Enter).
+    fn save_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Page::Contact(id) = self.page.clone() else {
+            return;
+        };
+        let name = self.rename_input.read(cx).value().trim().to_string();
+        self.renaming = false;
+        cx.notify();
+        if name.is_empty() {
+            return;
+        }
+        self.call(
+            Request::ContactRename {
+                contact: id,
+                name: name.clone(),
+            },
+            window,
+            cx,
+            move |_, _, window, cx| {
+                window.push_notification(Notification::success(s::renamed(&name)), cx)
+            },
+        );
+    }
+
+    /// Saves a setting typed in a field (button or Enter) and says so.
+    fn save_input(
+        &mut self,
+        key: &'static str,
+        input: Entity<InputState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let value = input.read(cx).value().to_string();
+        self.call(
+            Request::ConfigSet {
+                key: key.to_owned(),
+                value,
+            },
+            window,
+            cx,
+            |app, _, window, cx| {
+                window.push_notification(Notification::success(s::SAVED), cx);
+                app.load_config(window, cx);
+                app.load_status(window, cx);
+            },
+        );
+    }
+
+    /// The finished transfers that pass the history's search and filters.
+    fn filtered_history(&self, cx: &Context<Self>) -> Vec<TransferInfo> {
+        let query = self.history_search.read(cx).value().trim().to_lowercase();
+        self.history
+            .iter()
+            .filter(|t| self.history_dir.is_none_or(|d| t.direction == d))
+            .filter(|t| match self.history_outcome {
+                Outcome::All => true,
+                Outcome::Completed => t.status == TransferStatus::Completed,
+                Outcome::Problems => t.status != TransferStatus::Completed,
+            })
+            .filter(|t| {
+                query.is_empty()
+                    || t.label.to_lowercase().contains(&query)
+                    || t.peer_name.to_lowercase().contains(&query)
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn clear_filters(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.history_dir = None;
+        self.history_outcome = Outcome::All;
+        self.history_search
+            .update(cx, |i, cx| i.set_value("", window, cx));
+        cx.notify();
+    }
+
+    /// Opens or closes a history row's details, loading them the first
+    /// time.
+    fn toggle_details(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        if self.expanded.remove(&id).is_some() {
+            cx.notify();
+            return;
+        }
+        self.expanded.insert(id.clone(), None);
+        cx.notify();
+        let rx = self
+            .backend
+            .call(Request::TransferDetails { id: id.clone() });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = rx
+                .await
+                .unwrap_or_else(|_| Err("the service connection was lost".into()));
+            let _ = this.update_in(cx, |app, window, cx| {
+                match result {
+                    Ok(Response::Details(d)) => {
+                        if let Some(slot) = app.expanded.get_mut(&id) {
+                            *slot = Some(d);
+                        }
+                    }
+                    // Closed again rather than stuck on "Loading…".
+                    other => {
+                        app.expanded.remove(&id);
+                        let msg = match other {
+                            Err(msg) => msg,
+                            Ok(r) => format!("unexpected reply: {r:?}"),
+                        };
+                        app.notify_error(msg, window, cx);
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn remove_from_history(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.call(
+            Request::HistoryRemove { id: id.clone() },
+            window,
+            cx,
+            move |app, _, window, cx| {
+                app.history.retain(|t| t.id != id);
+                app.expanded.remove(&id);
+                window.push_notification(Notification::success(s::REMOVED_FROM_HISTORY), cx);
+                cx.notify();
+            },
+        );
+    }
+
+    /// Shows the transfer's files in the system file manager, selected:
+    /// what was received, or what was sent from.
+    fn show_in_folder(&mut self, t: &TransferInfo, window: &mut Window, cx: &mut Context<Self>) {
+        let fallback = t
+            .dest_dir
+            .clone()
+            .filter(|_| t.direction == Direction::Receive);
+        if let Some(Some(d)) = self.expanded.get(&t.id) {
+            let locations = d.locations.clone();
+            reveal(&locations, fallback.as_deref(), window, cx);
+            return;
+        }
+        self.call(
+            Request::TransferDetails { id: t.id.clone() },
+            window,
+            cx,
+            move |_, r, window, cx| {
+                if let Response::Details(d) = r {
+                    reveal(&d.locations, fallback.as_deref(), window, cx);
+                }
+            },
+        );
     }
 
     fn choose_download_dir(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -604,6 +972,7 @@ impl GigapairApp {
         for c in &self.contacts {
             let selected = self.page == Page::Contact(c.node_id.clone());
             let id = c.node_id.clone();
+            let drop_id = c.node_id.clone();
             let pending = self
                 .transfers
                 .iter()
@@ -615,11 +984,15 @@ impl GigapairApp {
                     selected,
                     &p,
                 )
-                .on_click(cx.listener(move |app, _, _, cx| {
-                    app.page = Page::Contact(id.clone());
-                    app.remove_armed = false;
-                    app.renaming = false;
-                    cx.notify();
+                .on_click(cx.listener(move |app, _, _, cx| app.go(Page::Contact(id.clone()), cx)))
+                // Files dropped on a contact go to that contact.
+                .drag_over::<ExternalPaths>(|style, _, _, cx| {
+                    let p = Palette::get(cx);
+                    style.bg(p.signal.opacity(0.18)).border_color(p.ink)
+                })
+                .on_drop(cx.listener(move |app, paths: &ExternalPaths, window, cx| {
+                    app.go(Page::Contact(drop_id.clone()), cx);
+                    app.send_paths(drop_id.clone(), paths.paths().to_vec(), window, cx)
                 }))
                 .child(
                     h_flex()
@@ -692,10 +1065,7 @@ impl GigapairApp {
                         .shadow(false),
                 )
                 .when(active, |b| b.border_1().border_color(p.line))
-                .on_click(cx.listener(move |app, _, _, cx| {
-                    app.page = page.clone();
-                    cx.notify();
-                }))
+                .on_click(cx.listener(move |app, _, _, cx| app.go(page.clone(), cx)))
         };
 
         col = col
@@ -774,16 +1144,14 @@ impl GigapairApp {
                         })),
                 );
         }
-        if let Some(dir) = t
-            .dest_dir
-            .clone()
-            .filter(|_| t.direction == Direction::Receive)
-        {
+        // A receiver that got nothing has nothing to show.
+        if t.direction == Direction::Send || t.done_bytes > 0 {
+            let shown = t.clone();
             buttons = buttons.child(
-                Button::new(SharedString::from(format!("open-{id}")))
-                    .label(s::OPEN_FOLDER)
-                    .on_click(cx.listener(move |_, _, _, cx| {
-                        cx.open_with_system(std::path::Path::new(&dir))
+                Button::new(SharedString::from(format!("show-{id}")))
+                    .label(s::SHOW_IN_FOLDER)
+                    .on_click(cx.listener(move |app, _, window, cx| {
+                        app.show_in_folder(&shown, window, cx)
                     })),
             );
         }
@@ -1073,12 +1441,18 @@ impl GigapairApp {
         });
 
         if requests.is_empty() && groups.is_empty() {
+            let name = self
+                .contacts
+                .iter()
+                .find(|c| c.node_id == open)
+                .map(|c| c.name.clone())
+                .unwrap_or_default();
             col = col.child(
                 div()
                     .mt(px(8.))
                     .text_size(px(12.))
                     .text_color(p.ink_3)
-                    .child(text(s::NO_TRANSFERS)),
+                    .child(text(s::no_transfers_hint(&name))),
             );
         }
         for ((_, direction, _), list) in groups {
@@ -1117,11 +1491,10 @@ impl GigapairApp {
             return div().child(text(s::SELECT_CONTACT)).into_any_element();
         };
         let p = Palette::get(cx);
-        let (id_files, id_folder, id_drop) =
-            (c.node_id.clone(), c.node_id.clone(), c.node_id.clone());
+        let (id_files, id_folder) = (c.node_id.clone(), c.node_id.clone());
         let id_trust = c.node_id.clone();
-        let id_rename = c.node_id.clone();
         let id_remove = c.node_id.clone();
+        let removed_name = c.name.clone();
         let current_name = c.name.clone();
         let armed = self.remove_armed;
 
@@ -1138,12 +1511,19 @@ impl GigapairApp {
             .on_click(cx.listener(move |app, _, window, cx| {
                 if app.remove_armed {
                     app.remove_armed = false;
-                    app.act(
+                    let name = removed_name.clone();
+                    app.call(
                         Request::ContactRemove {
                             contact: id_remove.clone(),
                         },
                         window,
                         cx,
+                        move |_, _, window, cx| {
+                            window.push_notification(
+                                Notification::success(s::contact_removed(&name)),
+                                cx,
+                            )
+                        },
                     );
                 } else {
                     app.remove_armed = true;
@@ -1152,28 +1532,13 @@ impl GigapairApp {
             }));
 
         let rename: AnyElement = if self.renaming {
-            let save_id = id_rename.clone();
             h_flex()
                 .gap(px(6.))
                 .child(div().w(px(170.)).child(Input::new(&self.rename_input)))
                 .child(
                     Button::new("rename-save")
                         .label(s::SAVE)
-                        .on_click(cx.listener(move |app, _, window, cx| {
-                            let name = app.rename_input.read(cx).value().to_string();
-                            if !name.trim().is_empty() {
-                                app.act(
-                                    Request::ContactRename {
-                                        contact: save_id.clone(),
-                                        name,
-                                    },
-                                    window,
-                                    cx,
-                                );
-                            }
-                            app.renaming = false;
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(|app, _, window, cx| app.save_rename(window, cx))),
                 )
                 .child(
                     Button::new("rename-cancel")
@@ -1190,8 +1555,10 @@ impl GigapairApp {
                 .label(s::RENAME)
                 .on_click(cx.listener(move |app, _, window, cx| {
                     let name = current_name.clone();
-                    app.rename_input
-                        .update(cx, |i, cx| i.set_value(name, window, cx));
+                    app.rename_input.update(cx, |i, cx| {
+                        i.set_value(name, window, cx);
+                        i.focus(window, cx);
+                    });
                     app.renaming = true;
                     cx.notify();
                 }))
@@ -1208,13 +1575,11 @@ impl GigapairApp {
             .border_dashed()
             .border_color(p.line)
             .bg(p.surface)
+            // The drop itself is handled by the whole page (`render`).
             .drag_over::<ExternalPaths>(|style, _, _, cx| {
                 let p = Palette::get(cx);
                 style.bg(p.signal.opacity(0.1)).border_color(p.ink)
             })
-            .on_drop(cx.listener(move |app, paths: &ExternalPaths, window, cx| {
-                app.send_paths(id_drop.clone(), paths.paths().to_vec(), window, cx)
-            }))
             .child(
                 h_flex()
                     .gap(px(3.))
@@ -1222,20 +1587,36 @@ impl GigapairApp {
                     .children((0..6).map(|_| glyph(style::icon::CELL, 12., p.ink_3))),
             )
             .child(wrapping_row(
-                div()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(selectable("drop-hint", s::drop_hint(&c.name))),
+                v_flex()
+                    .gap(px(2.))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(selectable("drop-hint", s::drop_hint(&c.name))),
+                    )
+                    .when(!c.online, |d| {
+                        d.child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(p.ink_2)
+                                .child(selectable("offline-hint", s::offline_hint(&c.name))),
+                        )
+                    }),
                 [h_flex()
                     .flex_wrap()
                     .gap(px(6.))
-                    .child(Button::new("choose-files").label(s::CHOOSE_FILES).on_click(
-                        cx.listener(move |app, _, window, cx| {
-                            app.pick_and_send(id_files.clone(), false, window, cx)
-                        }),
-                    ))
+                    .child(
+                        Button::new("choose-files")
+                            .label(s::CHOOSE_FILES)
+                            .tooltip(s::key("O"))
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                app.pick_and_send(id_files.clone(), false, window, cx)
+                            })),
+                    )
                     .child(
                         Button::new("choose-folder")
                             .label(s::CHOOSE_FOLDER)
+                            .tooltip(s::key_shift("O"))
                             .on_click(cx.listener(move |app, _, window, cx| {
                                 app.pick_and_send(id_folder.clone(), true, window, cx)
                             })),
@@ -1292,6 +1673,51 @@ impl GigapairApp {
             ))
             .child(drop_zone)
             .child(self.render_queue(node_id, cx))
+            .child(self.render_recent(&c, cx))
+            .into_any_element()
+    }
+
+    /// The last few finished transfers with this contact.
+    fn render_recent(&self, c: &Contact, cx: &mut Context<Self>) -> AnyElement {
+        const RECENT: usize = 5;
+        let recent: Vec<TransferInfo> = self
+            .history
+            .iter()
+            .filter(|t| t.peer_id == c.node_id)
+            .take(RECENT)
+            .cloned()
+            .collect();
+        if recent.is_empty() {
+            return div().into_any_element();
+        }
+        let p = Palette::get(cx);
+        let name = c.name.clone();
+        let mut rows = v_flex().border_b_1().border_color(p.line);
+        for t in &recent {
+            rows = rows.child(self.render_history_row(t, cx));
+        }
+        v_flex()
+            .mt(px(10.))
+            .child(
+                h_flex()
+                    .gap(px(8.))
+                    .child(small_label(s::RECENT, &p))
+                    .child(div().flex_1())
+                    .child(
+                        Button::new("see-all")
+                            .label(s::SEE_ALL)
+                            .ghost()
+                            .small()
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                app.clear_filters(window, cx);
+                                let name = name.clone();
+                                app.history_search
+                                    .update(cx, |i, cx| i.set_value(name, window, cx));
+                                app.go(Page::History, cx);
+                            })),
+                    ),
+            )
+            .child(rows)
             .into_any_element()
     }
 
@@ -1334,7 +1760,6 @@ impl GigapairApp {
                     .child(Input::new(input)),
             );
         }
-        let input_for_ok = input.clone();
         card.child(
             h_flex()
                 .gap(px(6.))
@@ -1343,28 +1768,7 @@ impl GigapairApp {
                         .label(s::WORDS_MATCH)
                         .primary()
                         .on_click(cx.listener(move |app, _, window, cx| {
-                            let name = input_for_ok
-                                .as_ref()
-                                .map(|i| i.read(cx).value().to_string())
-                                .unwrap_or_default();
-                            let id = id_ok.clone();
-                            app.call(
-                                Request::PairConfirm {
-                                    id: id.clone(),
-                                    name,
-                                },
-                                window,
-                                cx,
-                                move |app, r, window, cx| {
-                                    app.pending_pairs.retain(|p| p.id != id);
-                                    if let Response::Contact(c) = r {
-                                        app.pair_code = None;
-                                        app.page = Page::Contact(c.node_id);
-                                        app.load_contacts(window, cx);
-                                    }
-                                    cx.notify();
-                                },
-                            );
+                            app.confirm_pair(id_ok.clone(), window, cx)
                         })),
                 )
                 .child(
@@ -1480,35 +1884,16 @@ impl GigapairApp {
         col = col.child(share);
 
         // Use the other device's code.
-        let code_input = self.code_input.clone();
         col = col.child(
             section(s::USE_CODE_TITLE, s::USE_CODE_TEXT, &p).child(
                 h_flex()
                     .gap(px(6.))
                     .child(div().flex_1().child(Input::new(&self.code_input)))
-                    .child(Button::new("join").label(s::CONNECT).on_click(cx.listener(
-                        move |app, _, window, cx| {
-                            let code = code_input.read(cx).value().to_string();
-                            if code.trim().is_empty() {
-                                return;
-                            }
-                            app.call(
-                                Request::PairJoin { code },
-                                window,
-                                cx,
-                                |app, r, window, cx| {
-                                    if let Response::PendingPair(p) = r {
-                                        app.ensure_name_input(&p, window, cx);
-                                        app.pending_pairs.retain(|x| x.id != p.id);
-                                        app.pending_pairs.push(p);
-                                        app.code_input
-                                            .update(cx, |i, cx| i.set_value("", window, cx));
-                                        cx.notify();
-                                    }
-                                },
-                            );
-                        },
-                    ))),
+                    .child(
+                        Button::new("join")
+                            .label(s::CONNECT)
+                            .on_click(cx.listener(|app, _, window, cx| app.join_code(window, cx))),
+                    ),
             ),
         );
         col.into_any_element()
@@ -1533,6 +1918,8 @@ impl GigapairApp {
             TransferStatus::Cancelled => (s::cancelled_at(percent), t.error.clone(), p.ink_3),
             other => (other.label().to_owned(), t.error.clone(), p.ink_2),
         };
+        // "Rejected by Ana" is both the outcome and the stored reason.
+        let detail = detail.filter(|d| *d != headline);
         let (big, small) = amount_parts(None, t.total_bytes);
         let when = local_time(t.finished_at.unwrap_or(t.created_at))
             .map(|d| d.format("%H:%M").to_string())
@@ -1541,6 +1928,8 @@ impl GigapairApp {
             Direction::Send => s::sent_to(&t.peer_name, t.file_count),
             Direction::Receive => s::received_from(&t.peer_name, t.file_count),
         };
+        let open = self.expanded.contains_key(&t.id);
+        let id = t.id.clone();
 
         let name = v_flex()
             .gap(px(2.))
@@ -1594,32 +1983,192 @@ impl GigapairApp {
                 .text_color(p.ink_3)
                 .font_features(tabular())
                 .child(selectable(format!("when-{}", t.id), when)),
-            div()
-                .w(px(96.))
+            h_flex()
+                .min_w(px(96.))
                 .flex_shrink_0()
-                .child(self.transfer_actions(t, cx)),
+                .gap(px(2.))
+                .justify_end()
+                .child(self.transfer_actions(t, cx))
+                .child(
+                    Button::new(SharedString::from(format!("details-{}", t.id)))
+                        .label(if open { s::HIDE_DETAILS } else { s::DETAILS })
+                        .ghost()
+                        .on_click(cx.listener(move |app, _, window, cx| {
+                            app.toggle_details(id.clone(), window, cx)
+                        })),
+                ),
         ];
 
-        h_flex()
-            .gap(px(14.))
-            .py(px(8.))
-            .px(px(2.))
+        v_flex()
             .border_t_1()
             .border_color(p.line)
-            .child(dir_glyph(t.direction, 16., p.ink, &p))
-            .child(wrapping_row(name, columns))
+            .child(
+                h_flex()
+                    .gap(px(14.))
+                    .py(px(8.))
+                    .px(px(2.))
+                    .child(dir_glyph(t.direction, 16., p.ink, &p))
+                    .child(wrapping_row(name, columns)),
+            )
+            .when(open, |d| {
+                d.child(self.render_details(t, self.expanded.get(&t.id).cloned().flatten(), cx))
+            })
             .into_any_element()
+    }
+
+    /// Under a history row: the whole error, when, where the files are,
+    /// the files, and removing the row.
+    fn render_details(
+        &self,
+        t: &TransferInfo,
+        details: Option<TransferDetails>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let p = Palette::get(cx);
+        let col = v_flex()
+            .gap(px(8.))
+            .pl(px(32.))
+            .pr(px(2.))
+            .pb(px(12.))
+            .text_size(px(12.))
+            .text_color(p.ink_2);
+        let Some(d) = details else {
+            return col.child(text(s::LOADING));
+        };
+        let heading = |label: String| {
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.ink)
+                .child(selectable(format!("{label}-{}", t.id), label))
+        };
+        let id = t.id.clone();
+
+        let timing = match (local_time(t.created_at), t.finished_at.and_then(local_time)) {
+            (Some(start), Some(end)) => {
+                let same_day = start.date_naive() == end.date_naive();
+                let took =
+                    format_duration(end.signed_duration_since(start).num_seconds().max(0) as u64);
+                Some(s::timing(
+                    &start.format("%-d %b %H:%M").to_string(),
+                    &end.format(if same_day { "%H:%M" } else { "%-d %b %H:%M" })
+                        .to_string(),
+                    &took,
+                ))
+            }
+            _ => None,
+        };
+
+        let mut files = v_flex().gap(px(2.));
+        for (i, f) in d.files.iter().take(DETAILS_FILES_SHOWN).enumerate() {
+            files = files.child(
+                h_flex()
+                    .gap(px(8.))
+                    .items_start()
+                    .child(
+                        div()
+                            .w(px(10.))
+                            .flex_shrink_0()
+                            .text_color(if f.done { p.ink } else { p.ink_3 })
+                            .child(if f.done { "✓" } else { "·" }),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(selectable(format!("file-{id}-{i}"), f.path.clone())),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_color(p.ink_3)
+                            .font_features(tabular())
+                            .child(selectable(format!("fsize-{id}-{i}"), format_bytes(f.size))),
+                    ),
+            );
+        }
+        let more = d.files.len().saturating_sub(DETAILS_FILES_SHOWN) as u64 + d.more_files;
+
+        let has_location = !d.locations.is_empty();
+        let (show, remove) = (t.clone(), t.id.clone());
+        // A rejection's reason is already the row's outcome.
+        let error = t
+            .error
+            .clone()
+            .filter(|_| t.status != TransferStatus::Rejected);
+        col.when_some(error, |c, e| {
+            c.child(
+                div()
+                    .text_color(p.danger)
+                    .child(selectable(format!("error-full-{id}"), e)),
+            )
+        })
+        .when_some(timing, |c, timing| {
+            c.child(selectable(format!("timing-{id}"), timing))
+        })
+        .child(
+            v_flex()
+                .gap(px(2.))
+                .child(heading(s::ON_THIS_DEVICE.to_owned()))
+                .when(!has_location, |c| c.child(text(s::NOT_ON_DEVICE)))
+                .children(d.locations.iter().enumerate().map(|(i, l)| {
+                    div().child(selectable(format!("location-{id}-{i}"), l.clone()))
+                })),
+        )
+        .child(
+            v_flex()
+                .gap(px(2.))
+                .child(heading(s::file_count_title(t.file_count)))
+                .child(files)
+                .when(more > 0, |c| c.child(text(s::more_files(more)))),
+        )
+        .child(
+            h_flex()
+                .gap(px(6.))
+                .when(has_location, |c| {
+                    c.child(
+                        Button::new(SharedString::from(format!("details-show-{id}")))
+                            .label(s::SHOW_IN_FOLDER)
+                            .small()
+                            .on_click(cx.listener(move |app, _, window, cx| {
+                                app.show_in_folder(&show, window, cx)
+                            })),
+                    )
+                })
+                .child(
+                    Button::new(SharedString::from(format!("details-remove-{id}")))
+                        .label(s::REMOVE_FROM_HISTORY)
+                        .small()
+                        .custom(danger_ghost(&p, cx))
+                        .on_click(cx.listener(move |app, _, window, cx| {
+                            app.remove_from_history(remove.clone(), window, cx)
+                        })),
+                ),
+        )
     }
 
     fn render_history(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let p = Palette::get(cx);
+        let armed = self.clear_armed;
         let clear = Button::new("clear-history")
-            .label(s::CLEAR_HISTORY)
-            .ghost()
+            .label(if armed {
+                s::CLEAR_HISTORY_CONFIRM
+            } else {
+                s::CLEAR_HISTORY
+            })
+            .when(armed, |b| b.custom(danger_ghost(&p, cx)))
+            .when(!armed, |b| b.ghost())
             .disabled(self.history.is_empty())
             .on_click(cx.listener(|app, _, window, cx| {
-                app.call(Request::ClearHistory, window, cx, |app, _, _, cx| {
+                if !app.clear_armed {
+                    app.clear_armed = true;
+                    cx.notify();
+                    return;
+                }
+                app.clear_armed = false;
+                app.call(Request::ClearHistory, window, cx, |app, _, window, cx| {
                     app.history.clear();
+                    app.expanded.clear();
+                    window.push_notification(Notification::success(s::HISTORY_CLEARED), cx);
                     cx.notify();
                 })
             }));
@@ -1644,10 +2193,111 @@ impl GigapairApp {
                 .into_any_element();
         }
 
+        let chip = |id: &'static str,
+                    label: &'static str,
+                    selected: bool,
+                    set: fn(&mut Self),
+                    cx: &mut Context<Self>| {
+            Button::new(id)
+                .label(label)
+                .small()
+                .when(selected, |b| b.primary())
+                .when(!selected, |b| b.ghost())
+                .on_click(cx.listener(move |app, _, _, cx| {
+                    set(app);
+                    cx.notify();
+                }))
+        };
+        let (dir, outcome) = (self.history_dir, self.history_outcome);
+        col = col.child(
+            h_flex()
+                .flex_wrap()
+                .gap_x(px(14.))
+                .gap_y(px(6.))
+                .child(
+                    div().w(px(260.)).child(
+                        Input::new(&self.history_search)
+                            .small()
+                            .cleanable(true)
+                            .prefix(glyph(style::icon::SEARCH, 13., p.ink_3)),
+                    ),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(2.))
+                        .child(chip(
+                            "dir-all",
+                            s::FILTER_ALL,
+                            dir.is_none(),
+                            |a| a.history_dir = None,
+                            cx,
+                        ))
+                        .child(chip(
+                            "dir-sent",
+                            s::FILTER_SENT,
+                            dir == Some(Direction::Send),
+                            |a| a.history_dir = Some(Direction::Send),
+                            cx,
+                        ))
+                        .child(chip(
+                            "dir-received",
+                            s::FILTER_RECEIVED,
+                            dir == Some(Direction::Receive),
+                            |a| a.history_dir = Some(Direction::Receive),
+                            cx,
+                        )),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(2.))
+                        .child(chip(
+                            "outcome-all",
+                            s::FILTER_ALL,
+                            outcome == Outcome::All,
+                            |a| a.history_outcome = Outcome::All,
+                            cx,
+                        ))
+                        .child(chip(
+                            "outcome-completed",
+                            s::FILTER_COMPLETED,
+                            outcome == Outcome::Completed,
+                            |a| a.history_outcome = Outcome::Completed,
+                            cx,
+                        ))
+                        .child(chip(
+                            "outcome-problems",
+                            s::FILTER_PROBLEMS,
+                            outcome == Outcome::Problems,
+                            |a| a.history_outcome = Outcome::Problems,
+                            cx,
+                        )),
+                ),
+        );
+
+        let list = self.filtered_history(cx);
+        if list.is_empty() {
+            col = col.child(
+                h_flex()
+                    .gap(px(10.))
+                    .mt(px(6.))
+                    .text_size(px(12.))
+                    .text_color(p.ink_3)
+                    .child(text(s::NO_MATCHES))
+                    .child(
+                        Button::new("clear-filters")
+                            .label(s::CLEAR_FILTERS)
+                            .small()
+                            .on_click(
+                                cx.listener(|app, _, window, cx| app.clear_filters(window, cx)),
+                            ),
+                    ),
+            );
+        }
+
         let today = chrono::Local::now().date_naive();
         let mut day: Option<chrono::NaiveDate> = None;
         let mut rows: Option<Div> = None;
-        for t in self.history.clone() {
+        for t in list {
             let date = local_time(t.finished_at.unwrap_or(t.created_at)).map(|d| d.date_naive());
             if rows.is_none() || date != day {
                 if let Some(r) = rows.take() {
@@ -1668,6 +2318,20 @@ impl GigapairApp {
         }
         if let Some(r) = rows {
             col = col.child(r);
+        }
+        // The service may hold older ones than were loaded.
+        if self.history_more {
+            col = col.child(
+                h_flex().child(
+                    Button::new("history-more")
+                        .label(s::SHOW_MORE)
+                        .ghost()
+                        .on_click(cx.listener(|app, _, window, cx| {
+                            app.history_limit += HISTORY_PAGE;
+                            app.load_history(window, cx);
+                        })),
+                ),
+            );
         }
         col.into_any_element()
     }
@@ -1749,11 +2413,6 @@ impl GigapairApp {
             .map(|st| st.node_id.clone())
             .unwrap_or_default();
         let logs = self.logs_dir.clone();
-        let (device, relay, limit) = (
-            self.device_input.clone(),
-            self.relay_input.clone(),
-            self.limit_input.clone(),
-        );
 
         v_flex()
             .gap(px(8.))
@@ -1776,9 +2435,8 @@ impl GigapairApp {
                     .child(
                         Button::new("save-device")
                             .label(s::SAVE)
-                            .on_click(cx.listener(move |app, _, window, cx| {
-                                let v = device.read(cx).value().to_string();
-                                app.set_config("device_name", v, window, cx)
+                            .on_click(cx.listener(|app, _, window, cx| {
+                                app.save_input("device_name", app.device_input.clone(), window, cx)
                             })),
                     ),
             )
@@ -1890,9 +2548,8 @@ impl GigapairApp {
                     .child(
                         Button::new("save-relay")
                             .label(s::SAVE)
-                            .on_click(cx.listener(move |app, _, window, cx| {
-                                let v = relay.read(cx).value().to_string();
-                                app.set_config("relay_url", v, window, cx)
+                            .on_click(cx.listener(|app, _, window, cx| {
+                                app.save_input("relay_url", app.relay_input.clone(), window, cx)
                             })),
                     ),
             )
@@ -1904,13 +2561,38 @@ impl GigapairApp {
                     .child(
                         Button::new("save-limit")
                             .label(s::SAVE)
-                            .on_click(cx.listener(move |app, _, window, cx| {
-                                let v = limit.read(cx).value().to_string();
-                                app.set_config("upload_limit_kib", v, window, cx)
+                            .on_click(cx.listener(|app, _, window, cx| {
+                                app.save_input(
+                                    "upload_limit_kib",
+                                    app.limit_input.clone(),
+                                    window,
+                                    cx,
+                                )
                             })),
                     ),
             )
             .child(note(s::RESTART_NOTE))
+            .child(label(s::SETTINGS_SHORTCUTS))
+            .child(
+                v_flex().gap(px(3.)).text_size(px(12.)).children(
+                    s::shortcuts()
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (keys, what))| {
+                            h_flex()
+                                .gap(px(10.))
+                                .items_start()
+                                .child(
+                                    div()
+                                        .w(px(130.))
+                                        .flex_shrink_0()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(selectable(format!("shortcut-{i}"), keys)),
+                                )
+                                .child(div().min_w_0().text_color(p.ink_2).child(text(what)))
+                        }),
+                ),
+            )
             .child(label(s::SETTINGS_UPDATES))
             .child(self.render_update_check(cx))
             .child(note(s::UPDATES_NOTE))
@@ -2089,6 +2771,11 @@ impl Render for GigapairApp {
                     ),
             );
         }
+        if let Page::Contact(id) = self.page.clone() {
+            main = main.on_drop(cx.listener(move |app, paths: &ExternalPaths, window, cx| {
+                app.send_paths(id.clone(), paths.paths().to_vec(), window, cx)
+            }));
+        }
         main = main.child(div().w_full().max_w(px(1100.)).child(page));
 
         h_flex()
@@ -2205,6 +2892,16 @@ fn dir_glyph(direction: Direction, size: f32, ink: Hsla, p: &Palette) -> Div {
         .flex_shrink_0()
         .child(glyph(style::icon::DIR_BLOCK, size, p.signal).absolute())
         .child(glyph(arrow, size, ink).absolute())
+}
+
+/// A text button in the danger colour (removing, deleting).
+fn danger_ghost(p: &Palette, cx: &mut gpui_kit::App) -> ButtonCustomVariant {
+    ButtonCustomVariant::new(cx)
+        .color(gpui_kit::transparent_black())
+        .foreground(p.danger)
+        .hover(p.danger.opacity(0.1))
+        .active(p.danger.opacity(0.18))
+        .shadow(false)
 }
 
 fn small_label(text: &'static str, p: &Palette) -> Div {
@@ -2442,6 +3139,29 @@ fn amount_parts(done: Option<u64>, total: u64) -> (String, String) {
     match done {
         Some(done) => (fmt(done), s::of_total(&fmt(total), UNITS[unit])),
         None => (fmt(total), UNITS[unit].to_owned()),
+    }
+}
+
+/// Selects the first location that still exists in the file manager, or
+/// opens `fallback` (the destination folder); says so if neither is there.
+fn reveal(
+    locations: &[String],
+    fallback: Option<&str>,
+    window: &mut Window,
+    cx: &mut gpui_kit::App,
+) {
+    let existing = |p: &str| {
+        // Explorer can't select a `\\?\` path.
+        let p = PathBuf::from(p.strip_prefix(r"\\?\").unwrap_or(p));
+        p.exists().then_some(p)
+    };
+    if let Some(path) = locations.iter().find_map(|l| existing(l)) {
+        tracing::info!("showing a transfer's files in the file manager");
+        cx.reveal_path(&path);
+    } else if let Some(dir) = fallback.and_then(existing) {
+        cx.open_with_system(&dir);
+    } else {
+        window.push_notification(Notification::warning(s::NOT_FOUND), cx);
     }
 }
 

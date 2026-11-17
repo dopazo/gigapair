@@ -48,9 +48,10 @@ pub mod icon {
     pub const NAV_SETTINGS: &str = "gigapair/nav-settings.svg";
     pub const NAV_ADD: &str = "gigapair/nav-add.svg";
     pub const AWAKE: &str = "gigapair/awake.svg";
+    pub const SEARCH: &str = "gigapair/search.svg";
 }
 
-const GLYPHS: [(&str, &[u8]); 12] = [
+const GLYPHS: [(&str, &[u8]); 13] = [
     (icon::MARK_G, include_bytes!("../assets/icons/mark-g.svg")),
     (
         icon::MARK_BLOCK,
@@ -84,6 +85,7 @@ const GLYPHS: [(&str, &[u8]); 12] = [
     ),
     (icon::NAV_ADD, include_bytes!("../assets/icons/nav-add.svg")),
     (icon::AWAKE, include_bytes!("../assets/icons/awake.svg")),
+    (icon::SEARCH, include_bytes!("../assets/icons/search.svg")),
 ];
 
 /// The component library's assets plus the app's glyphs.
