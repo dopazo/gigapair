@@ -63,7 +63,7 @@ pub fn load_or_create(
             }
             if used_before {
                 // Moving from the keyring to a file.
-                return match keyring_read(&account) {
+                return match keyring_find(dirs) {
                     Ok(Some(key)) => {
                         file_write(&file, &key)?;
                         Ok((key, KeyLocation::File))
@@ -74,7 +74,7 @@ pub fn load_or_create(
             Ok((file_create(&file)?, KeyLocation::File))
         }
         KeyStorage::Keyring => {
-            if let Some(key) = keyring_read(&account)? {
+            if let Some(key) = keyring_find(dirs)? {
                 return Ok((key, KeyLocation::Keyring));
             }
             if let Some(key) = file_read(&file)? {
@@ -91,7 +91,7 @@ pub fn load_or_create(
             if let Some(key) = file_read(&file)? {
                 return Ok((key, KeyLocation::File));
             }
-            match keyring_read(&account) {
+            match keyring_find(dirs) {
                 Ok(Some(key)) => Ok((key, KeyLocation::Keyring)),
                 Ok(None) if used_before => Err(missing("not in the keyring nor the key file")),
                 Err(e) if used_before => Err(e),
@@ -114,10 +114,13 @@ pub fn delete(dirs: &AppDirs) -> Result<(), KeyError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(source) => return Err(KeyError::File { path: file, source }),
     }
-    match keyring_entry(&keyring_account(dirs))?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(keyring_err(e)),
+    for account in keyring_accounts(dirs) {
+        match keyring_entry(&account)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(e) => return Err(keyring_err(e)),
+        }
     }
+    Ok(())
 }
 
 /// First run without a usable keyring (headless servers).
@@ -132,6 +135,41 @@ fn keyring_account(dirs: &AppDirs) -> String {
     } else {
         "node-key".to_owned()
     }
+}
+
+/// Every keyring entry this instance may have used, current first. Before
+/// custom roots were normalized ([`AppDirs::instance_tag`]), the entry name
+/// came from the path as written.
+fn keyring_accounts(dirs: &AppDirs) -> Vec<String> {
+    let mut accounts = vec![keyring_account(dirs)];
+    if dirs.custom_root {
+        let legacy = format!("node-key-{}", dirs.legacy_instance_tag());
+        if legacy != accounts[0] {
+            accounts.push(legacy);
+        }
+    }
+    accounts
+}
+
+/// The key in the keyring, also under the name an older version used for
+/// this folder. A key found there is copied to the current name.
+fn keyring_find(dirs: &AppDirs) -> Result<Option<SecretKey>, KeyError> {
+    let accounts = keyring_accounts(dirs);
+    let Some((current, older)) = accounts.split_first() else {
+        return Ok(None);
+    };
+    if let Some(key) = keyring_read(current)? {
+        return Ok(Some(key));
+    }
+    for old in older {
+        if let Some(key) = keyring_read(old)? {
+            if let Err(e) = keyring_write(current, &key) {
+                tracing::warn!("could not copy the node key to its new keyring entry: {e}");
+            }
+            return Ok(Some(key));
+        }
+    }
+    Ok(None)
 }
 
 fn keyring_err(e: keyring::Error) -> KeyError {
@@ -271,6 +309,26 @@ mod tests {
             Err(KeyError::Missing(..))
         ));
         assert!(!dirs.key_file().exists());
+    }
+
+    #[test]
+    fn keyring_entry_written_the_old_way_is_found() {
+        let dirs = AppDirs::under(Path::new("/srv/./gp/"));
+        let accounts = keyring_accounts(&dirs);
+        assert_eq!(
+            accounts,
+            [
+                format!("node-key-{}", dirs.instance_tag()),
+                format!("node-key-{}", dirs.legacy_instance_tag()),
+            ]
+        );
+        if !cfg!(windows) {
+            // Already in normal form: one name, nothing to look for.
+            assert_eq!(
+                keyring_accounts(&AppDirs::under(Path::new("/srv/gp"))).len(),
+                1
+            );
+        }
     }
 
     #[test]
